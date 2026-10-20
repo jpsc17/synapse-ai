@@ -76,7 +76,7 @@ class GovernanceService:
                 raise GovernanceViolationError(
                     "Tentativa de execução bloqueada: o plano ainda está PENDENTE de aprovação humana de governança."
                 )
-            elif plan.status == "REJEITADO":
+            elif plan.status in ("REJECTED", "REJEITADO"):
                 raise GovernanceViolationError(
                     "Tentativa de execução bloqueada: o plano foi formalmente REJEITADO e não pode ser processado."
                 )
