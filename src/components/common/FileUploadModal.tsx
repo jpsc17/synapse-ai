@@ -84,7 +84,7 @@ export const FileUploadModal: React.FC = () => {
         return;
       }
 
-      await addDataSourceFromUpload(fileName, content);
+      await addDataSourceFromUpload(fileName, content, selectedFile || undefined);
       setIsUploadModalOpen(false);
     } catch (err: unknown) {
       alert(`Falha ao processar arquivo: ${err instanceof Error ? err.message : String(err)}`);
