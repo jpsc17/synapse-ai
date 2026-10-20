@@ -1,0 +1,39 @@
+{
+  "projectId": "4498337919700208520",
+  "title": "SYNAPSE Intelligent Systems Platform",
+  "deviceType": "DESKTOP",
+  "lastSyncTime": "2026-10-20T01:43:00.000Z",
+  "designSystem": "Precision Orchestration",
+  "screens": {
+    "75d483b60b1d4697bb2139ffb56e69ca": {
+      "id": "75d483b60b1d4697bb2139ffb56e69ca",
+      "label": "Visão Geral Executiva",
+      "route": "/",
+      "component": "OverviewPage"
+    },
+    "4cd8d421393640139712a8c2caff427a": {
+      "id": "4cd8d421393640139712a8c2caff427a",
+      "label": "Workspace Inteligente",
+      "route": "/workspace",
+      "component": "WorkspacePage"
+    },
+    "9d79c06796144a66b36cb8df6901c471": {
+      "id": "9d79c06796144a66b36cb8df6901c471",
+      "label": "Descoberta Inteligente",
+      "route": "/discovery",
+      "component": "DiscoveryPage"
+    },
+    "1c13c774a31f441d931e1e32be83c065": {
+      "id": "1c13c774a31f441d931e1e32be83c065",
+      "label": "Construtor Visual de Pipelines",
+      "route": "/pipelines",
+      "component": "PipelinesPage"
+    },
+    "fb523bf48d2b49b98377329af82c13e8": {
+      "id": "fb523bf48d2b49b98377329af82c13e8",
+      "label": "Workspace Inteligente — Grafo de Relações",
+      "route": "/workspace",
+      "component": "WorkspacePage"
+    }
+  }
+}

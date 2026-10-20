@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import * as XLSX from 'xlsx';
 import { useSynapse } from '../../context/SynapseContext';
 
 export const FileUploadModal: React.FC = () => {
@@ -53,16 +54,32 @@ export const FileUploadModal: React.FC = () => {
     setSelectedFile(null);
   };
 
+  const parseFileContent = async (file: File): Promise<string> => {
+    const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
+    if (isExcel) {
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: 'array' });
+      const firstSheetName = workbook.SheetNames[0];
+      if (!firstSheetName) {
+        throw new Error('A planilha selecionada não possui abas de dados.');
+      }
+      const worksheet = workbook.Sheets[firstSheetName];
+      // Converte a aba para formato CSV estruturado
+      return XLSX.utils.sheet_to_csv(worksheet);
+    }
+    return await file.text();
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     try {
       let content = customText;
       if (selectedFile) {
-        content = await selectedFile.text();
+        content = await parseFileContent(selectedFile);
       }
       if (!content.trim()) {
-        alert('Por favor, carregue um arquivo ou cole o conteúdo CSV.');
+        alert('Por favor, carregue um arquivo válido ou cole o conteúdo CSV.');
         setIsLoading(false);
         return;
       }
@@ -89,7 +106,8 @@ export const FileUploadModal: React.FC = () => {
           </div>
           <button 
             onClick={() => setIsUploadModalOpen(false)}
-            className="text-on-surface-variant hover:text-on-surface p-1 rounded"
+            aria-label="Fechar modal"
+            className="text-on-surface-variant hover:text-on-surface p-1 rounded transition-colors"
           >
             <span className="material-symbols-outlined text-[18px]">close</span>
           </button>
