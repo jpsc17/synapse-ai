@@ -1,4 +1,4 @@
-FROM docker.n8n.io/n8nio/n8n:2.43.8
+FROM n8nio/n8n:2.43.8
 
 USER root
 COPY n8n-entrypoint.sh /opt/synapse/n8n-entrypoint.sh
