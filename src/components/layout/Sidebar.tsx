@@ -26,18 +26,24 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onNavigate }) => {
       {/* Top Area: Brand & Navigation */}
       <div className="flex flex-col gap-space-md">
         {/* Brand Header */}
-        <div 
+        <button
+          type="button"
+          aria-label="Ir para a visão geral"
           onClick={() => { navigate('/'); onNavigate(); }}
-          className="px-space-md py-space-xs flex items-center gap-space-sm cursor-pointer group"
+          className="group flex w-full items-center gap-space-sm px-space-md py-space-xs text-left"
         >
-          <div className="w-8 h-8 rounded bg-surface-container-high border border-outline-variant flex items-center justify-center glow-primary group-hover:border-primary transition-all">
-            <Icon name="hub" className="text-primary text-[20px]" />
+          <div className="h-8 w-8 overflow-hidden rounded border border-outline-variant bg-black glow-primary transition-all group-hover:border-primary">
+            <img
+              src="/synapse-logo-official.jpg"
+              alt=""
+              className="h-full w-full object-cover object-center"
+            />
           </div>
           <div className="flex flex-col">
             <span className="text-headline-md font-semibold tracking-tight text-primary leading-tight">SYNAPSE</span>
             <span className="text-[10px] text-on-surface-variant font-code-compact tracking-tight">Sistemas que entendem sistemas</span>
           </div>
-        </div>
+        </button>
 
         {/* Quick Action CTA */}
         <div className="px-space-sm pt-space-xs">

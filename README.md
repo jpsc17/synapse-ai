@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./public/favicon.svg" width="72" alt="Ícone do SYNAPSE AI">
+  <img src="./public/synapse-logo-official.jpg" height="260" alt="Logo oficial do SYNAPSE AI">
 </p>
 
 # SYNAPSE AI
