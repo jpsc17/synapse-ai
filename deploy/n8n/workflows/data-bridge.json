@@ -1,0 +1,76 @@
+{
+  "id": "WvgldAqi81hUMq58",
+  "name": "SYNAPSE - Data Bridge POC",
+  "nodes": [
+    {
+      "id": "5449c193-b454-44c9-854a-596b576326d1",
+      "name": "When clicking Test workflow",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "3d085869-cfcc-4d7d-b5f3-a5466238e29f",
+      "name": "Data Bridge Logic",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        96
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// SYNAPSE - Data Bridge Generico & Agnóstico com Retrocompatibilidade\nconst item = $input.first()?.json || {};\nconst body = item.body || item;\n\n// Suporte a baseA/baseB agnósticos ou funcionarios/pagamentos legados\nconst rawBaseA = (Array.isArray(body.baseA) && body.baseA.length > 0)\n  ? body.baseA\n  : (Array.isArray(body.funcionarios) && body.funcionarios.length > 0)\n    ? body.funcionarios\n    : [\n        { MATVINC: 1001, nome: 'Ana', SETOR: 'TI' },\n        { MATVINC: 1002, nome: 'Bruno', SETOR: 'RH' },\n        { MATVINC: 1003, nome: 'Carla', SETOR: 'Financeiro' }\n      ];\n\nconst rawBaseB = (Array.isArray(body.baseB) && body.baseB.length > 0)\n  ? body.baseB\n  : (Array.isArray(body.pagamentos) && body.pagamentos.length > 0)\n    ? body.pagamentos\n    : [\n        { matricula: 1001, valor: 2500, competencia: '2026-10' },\n        { matricula: 1002, valor: 3100, competencia: '2026-10' },\n        { matricula: 1004, valor: 2800, competencia: '2026-10' }\n      ];\n\n// Identificação das chaves de junção\nfunction findKey(sampleRow, preferredKey) {\n  if (preferredKey && sampleRow && preferredKey in sampleRow) return preferredKey;\n  if (!sampleRow) return 'id';\n  const keys = Object.keys(sampleRow);\n  for (const k of ['MATVINC', 'matricula', 'id', 'codigo', 'cod', 'chave']) {\n    const found = keys.find(x => x.toLowerCase() === k.toLowerCase());\n    if (found) return found;\n  }\n  return keys[0] || 'id';\n}\n\nconst keyA = body.keyA || findKey(rawBaseA[0], null);\nconst keyB = body.keyB || findKey(rawBaseB[0], null);\n\n// Normalização determinística de chaves\nfunction normalizeKey(v) {\n  if (v === null || v === undefined) return null;\n  let s = String(v).trim();\n  if (s === '') return null;\n  if (/^[0-9]+$/.test(s)) {\n    s = s.replace(/^0+/, '');\n    return s === '' ? '0' : s;\n  }\n  return s.toLowerCase();\n}\n\n// Indexação da Base B para busca eficiente em O(1)\nconst mapB = new Map();\nconst matchedKeysB = new Set();\n\nfor (const rowB of rawBaseB) {\n  const rawK = rowB[keyB] ?? rowB.matricula ?? rowB.MATVINC ?? rowB.id;\n  const k = normalizeKey(rawK);\n  if (k !== null) {\n    if (!mapB.has(k)) {\n      mapB.set(k, []);\n    }\n    mapB.get(k).push(rowB);\n  }\n}\n\nconst matched = [];\nconst unmatchedA = [];\n\n// Cruzamento a partir da Base A\nfor (const rowA of rawBaseA) {\n  const rawK = rowA[keyA] ?? rowA.MATVINC ?? rowA.matricula ?? rowA.id;\n  const k = normalizeKey(rawK);\n\n  if (k !== null && mapB.has(k)) {\n    matchedKeysB.add(k);\n    const rowsB = mapB.get(k);\n    for (const matchB of rowsB) {\n      const compatibilityValue = matchB.valor ?? matchB.valor_pagamento ?? matchB.valor_total_item;\n      const merged = {\n        ...rowA,\n        ...matchB,\n        _matchDetails: {\n          keyA,\n          keyB,\n          keyValueA: rawK,\n          keyValueB: matchB[keyB]\n        },\n        _statusRelacao: 'CORRESPONDENCIA_ENCONTRADA',\n        // Retrocompatibilidade com testes e componentes legados\n        matricula: String(rawK),\n        nome: rowA.nome ?? rowA.NOME_SERVIDOR ?? rowA.DESCRICAO_ITEM ?? String(rawK),\n        ...(compatibilityValue !== null && compatibilityValue !== undefined ? { valor: compatibilityValue } : {}),\n        status: 'PAGO'\n      };\n      matched.push(merged);\n    }\n  } else {\n    unmatchedA.push({\n      ...rowA,\n      _statusRelacao: 'SEM_CORRESPONDENCIA_EM_B',\n      matricula: String(rawK),\n      nome: rowA.nome ?? rowA.NOME_SERVIDOR ?? rowA.DESCRICAO_ITEM ?? String(rawK),\n      status: 'SEM_PAGAMENTO'\n    });\n  }\n}\n\n// Identificação das divergências exclusivas da Base B\nconst unmatchedB = [];\nfor (const rowB of rawBaseB) {\n  const rawK = rowB[keyB] ?? rowB.matricula ?? rowB.MATVINC ?? rowB.id;\n  const k = normalizeKey(rawK);\n  if (k === null || !matchedKeysB.has(k)) {\n    const compatibilityValue = rowB.valor ?? rowB.valor_pagamento ?? rowB.valor_total_item;\n    unmatchedB.push({\n      ...rowB,\n      _statusRelacao: 'SEM_CORRESPONDENCIA_EM_A',\n      matricula: String(rawK),\n      ...(compatibilityValue !== null && compatibilityValue !== undefined ? { valor: compatibilityValue } : {}),\n      status: 'SEM_FUNCIONARIO_CORRESPONDENTE'\n    });\n  }\n}\n\nconst resultado = {\n  poc: 'SYNAPSE - Data Bridge Universal',\n  executadoEm: new Date().toISOString(),\n  resumo: {\n    totalBaseA: rawBaseA.length,\n    totalBaseB: rawBaseB.length,\n    qtdCorrespondencias: matched.length,\n    qtdApenasBaseA: unmatchedA.length,\n    qtdApenasBaseB: unmatchedB.length,\n    // Retrocompatibilidade\n    totalFuncionarios: rawBaseA.length,\n    totalPagamentos: rawBaseB.length,\n    qtdFuncionariosComPagamento: matched.length,\n    qtdFuncionariosSemPagamento: unmatchedA.length,\n    qtdPagamentosSemFuncionario: unmatchedB.length\n  },\n  keyA,\n  keyB,\n  matched,\n  unmatchedA,\n  unmatchedB,\n  // Retrocompatibilidade\n  funcionariosComPagamento: matched,\n  funcionariosSemPagamento: unmatchedA,\n  pagamentosSemFuncionario: unmatchedB\n};\n\nreturn [{ json: resultado }];\n",
+        "parameters": {
+          "jsCode": "// SYNAPSE - Data Bridge Universal & Agnostico (Fase 3C)\nconst item = $input.first()?.json || {};\nconst body = item.body || item;\n\n// 1. Suporte a baseA/baseB agnosticos ou funcionarios/pagamentos legados\nconst rawBaseA = (Array.isArray(body.baseA) && body.baseA.length > 0)\n  ? body.baseA\n  : (Array.isArray(body.funcionarios) && body.funcionarios.length > 0)\n    ? body.funcionarios\n    : [\n        { MATVINC: 1001, NOME_SERVIDOR: 'Ana Silva', SETOR: 'TI' },\n        { MATVINC: 1002, NOME_SERVIDOR: 'Bruno Costa', SETOR: 'RH' },\n        { MATVINC: 1003, NOME_SERVIDOR: 'Carla Dias', SETOR: 'Financeiro' }\n      ];\n\nconst rawBaseB = (Array.isArray(body.baseB) && body.baseB.length > 0)\n  ? body.baseB\n  : (Array.isArray(body.pagamentos) && body.pagamentos.length > 0)\n    ? body.pagamentos\n    : [\n        { matricula_funcional: 1001, valor_pagamento: 2500, competencia: '2026-10' },\n        { matricula_funcional: 1002, valor_pagamento: 3100, competencia: '2026-10' },\n        { matricula_funcional: 1004, valor_pagamento: 2800, competencia: '2026-10' }\n      ];\n\n// 2. Identificacao dinamica das chaves de juncao\nfunction findKey(sampleRow, preferredKey) {\n  if (preferredKey && sampleRow && preferredKey in sampleRow) return preferredKey;\n  if (!sampleRow) return 'id';\n  const keys = Object.keys(sampleRow);\n  for (const k of ['MATVINC', 'matricula', 'matricula_funcional', 'id', 'codigo', 'cod', 'cod_produto', 'codigo_item', 'sku', 'id_produto', 'chave']) {\n    const found = keys.find(x => x.toLowerCase() === k.toLowerCase());\n    if (found) return found;\n  }\n  return keys[0] || 'id';\n}\n\nconst keyA = body.keyA || findKey(rawBaseA[0], null);\nconst keyB = body.keyB || findKey(rawBaseB[0], null);\n\n// 3. Normalizacao deterministica de chaves (trim, zeros a esquerda, case-insensitive)\nfunction normalizeKey(v) {\n  if (v === null || v === undefined) return null;\n  let s = String(v).trim();\n  if (s === '') return null;\n  if (/^[0-9]+$/.test(s)) {\n    s = s.replace(/^0+/, '');\n    return s === '' ? '0' : s;\n  }\n  return s.toLowerCase();\n}\n\n// 4. Indexacao da Base B para busca eficiente O(1)\nconst mapB = new Map();\nconst matchedKeysB = new Set();\n\nfor (const rowB of rawBaseB) {\n  const rawK = rowB[keyB] ?? rowB.matricula_funcional ?? rowB.matricula ?? rowB.MATVINC ?? rowB.id;\n  const k = normalizeKey(rawK);\n  if (k !== null) {\n    if (!mapB.has(k)) {\n      mapB.set(k, []);\n    }\n    mapB.get(k).push(rowB);\n  }\n}\n\nconst matched = [];\nconst unmatchedA = [];\n\n// 5. Cruzamento deterministico a partir da Base A\nfor (const rowA of rawBaseA) {\n  const rawK = rowA[keyA] ?? rowA.MATVINC ?? rowA.matricula_funcional ?? rowA.matricula ?? rowA.id;\n  const k = normalizeKey(rawK);\n\n  if (k !== null && mapB.has(k)) {\n    matchedKeysB.add(k);\n    const rowsB = mapB.get(k);\n    for (const matchB of rowsB) {\n      // Mescla todos os atributos originais sem truncamento ou defaults silenciosos\n      const merged = {\n        ...rowA,\n        ...matchB,\n        _matchDetails: {\n          keyA,\n          keyB,\n          keyValueA: rawK,\n          keyValueB: matchB[keyB]\n        },\n        _statusRelacao: 'CORRESPONDENCIA_ENCONTRADA',\n        // Campos de retrocompatibilidade para testes legados\n        matricula: String(rawK),\n        nome: rowA.nome ?? rowA.NOME_SERVIDOR ?? rowA.descricao ?? rowA.DESCRICAO_ITEM ?? String(rawK),\n        valor: matchB.valor ?? matchB.valor_pagamento ?? matchB.preco ?? matchB.total ?? null,\n        status: 'PAGO'\n      };\n      matched.push(merged);\n    }\n  } else {\n    unmatchedA.push({\n      ...rowA,\n      _statusRelacao: 'SEM_CORRESPONDENCIA_EM_B',\n      matricula: String(rawK),\n      nome: rowA.nome ?? rowA.NOME_SERVIDOR ?? rowA.descricao ?? rowA.DESCRICAO_ITEM ?? String(rawK),\n      status: 'SEM_PAGAMENTO'\n    });\n  }\n}\n\n// 6. Divergencias exclusivas da Base B\nconst unmatchedB = [];\nfor (const rowB of rawBaseB) {\n  const rawK = rowB[keyB] ?? rowB.matricula_funcional ?? rowB.matricula ?? rowB.MATVINC ?? rowB.id;\n  const k = normalizeKey(rawK);\n  if (k === null || !matchedKeysB.has(k)) {\n    unmatchedB.push({\n      ...rowB,\n      _statusRelacao: 'SEM_CORRESPONDENCIA_EM_A',\n      matricula: String(rawK),\n      valor: rowB.valor ?? rowB.valor_pagamento ?? rowB.preco ?? rowB.total ?? null,\n      status: 'SEM_FUNCIONARIO_CORRESPONDENTE'\n    });\n  }\n}\n\n// 7. Resumo estruturado auditavel\nconst resultado = {\n  poc: 'SYNAPSE - Data Bridge Universal',\n  executadoEm: new Date().toISOString(),\n  resumo: {\n    totalBaseA: rawBaseA.length,\n    totalBaseB: rawBaseB.length,\n    qtdCorrespondencias: matched.length,\n    qtdApenasBaseA: unmatchedA.length,\n    qtdApenasBaseB: unmatchedB.length,\n    keyA,\n    keyB,\n    // Retrocompatibilidade\n    totalFuncionarios: rawBaseA.length,\n    totalPagamentos: rawBaseB.length,\n    qtdFuncionariosComPagamento: matched.length,\n    qtdFuncionariosSemPagamento: unmatchedA.length,\n    qtdPagamentosSemFuncionario: unmatchedB.length\n  },\n  keyA,\n  keyB,\n  matched,\n  unmatchedA,\n  unmatchedB,\n  // Retrocompatibilidade\n  funcionariosComPagamento: matched,\n  funcionariosSemPagamento: unmatchedA,\n  pagamentosSemFuncionario: unmatchedB\n};\n\nreturn [{ json: resultado }];\n"
+        }
+      }
+    },
+    {
+      "id": "02126e96-563d-4bc7-8dd7-f2c9c0e5b935",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        192
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "synapse-data-bridge",
+        "responseMode": "lastNode",
+        "responseData": "firstEntryJson"
+      },
+      "webhookId": "dc6f7336-20d8-4f34-af17-c84953df4289"
+    }
+  ],
+  "connections": {
+    "When clicking Test workflow": {
+      "main": [
+        [
+          {
+            "node": "Data Bridge Logic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Data Bridge Logic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

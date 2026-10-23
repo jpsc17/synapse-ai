@@ -18,12 +18,71 @@ class DataSourceResponse(BaseModel):
     rowCount: int
     columnCount: int
     status: str
-    lastSync: str
+    updatedAt: datetime
     isCustomUpload: bool = False
     columns: List[ColumnMeta] = Field(default_factory=list)
 
     class Config:
         from_attributes = True
+
+class DataSourceRenameRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+
+class DataSourcePreviewResponse(BaseModel):
+    source: DataSourceResponse
+    records: List[Dict[str, Any]] = Field(default_factory=list)
+    limit: int
+
+class DataSourceDependenciesResponse(BaseModel):
+    source_id: str
+    analysis_plan_count: int
+    decision_count: int
+    execution_count: int
+    can_delete: bool
+    can_resolve_and_delete: bool
+    recommended_action: str
+    plans: List[Dict[str, Any]] = Field(default_factory=list)
+
+class DataSourceDeleteRequest(BaseModel):
+    confirm: bool = False
+    delete_eligible_plans: bool = False
+
+class DataSourceBulkDeleteRequest(BaseModel):
+    source_ids: List[str] = Field(min_length=1)
+    confirm: bool = False
+
+class DataSourceDeleteResponse(BaseModel):
+    deleted_ids: List[str] = Field(default_factory=list)
+    deleted_count: int
+    deleted_plan_ids: List[str] = Field(default_factory=list)
+    file_results: Dict[str, str] = Field(default_factory=dict)
+
+class DataSourceArchiveRequest(BaseModel):
+    confirm: bool = False
+
+class DataSourceBulkImpactRequest(BaseModel):
+    source_ids: List[str] = Field(min_length=1)
+
+class DataSourceBulkImpactResponse(BaseModel):
+    total: int
+    deletable: int
+    resolvable: int
+    archivable: int
+    blocked: int
+    items: List[DataSourceDependenciesResponse] = Field(default_factory=list)
+
+class AdministrativeCleanupRequest(BaseModel):
+    confirmation: str
+
+class AdministrativeCleanupImpactResponse(BaseModel):
+    enabled: bool
+    environment: str
+    source_count: int
+    plan_count: int
+    decision_count: int
+    execution_count: int
+    file_count: int
+    confirmation_phrase: str
 
 # Modelos para Descoberta
 class AnalyzeRequest(BaseModel):
@@ -45,6 +104,8 @@ class AnalysisPlanResponse(BaseModel):
     plan_id: str
     source_a_id: str
     source_b_id: str
+    source_a_name: Optional[str] = None
+    source_b_name: Optional[str] = None
     status: str # PENDING_APPROVAL, APPROVED, REJECTED, EXECUTED
     suggested_relation: Optional[RelationshipCandidateSchema] = None
     all_candidates: List[RelationshipCandidateSchema] = Field(default_factory=list)
@@ -100,6 +161,21 @@ class PipelineExecutionResponse(BaseModel):
     duration_ms: int
     executed_at: datetime
 
+class PipelineExecutionSummaryResponse(BaseModel):
+    execution_id: str
+    plan_id: str
+    source_a_id: str
+    source_b_id: str
+    source_a_name: str
+    source_b_name: str
+    status: str
+    workflow_id: str
+    matched_records_count: int
+    unmatched_a_count: int
+    unmatched_b_count: int
+    duration_ms: int
+    executed_at: datetime
+
 # Health check
 class HealthResponse(BaseModel):
     status: str
@@ -107,3 +183,15 @@ class HealthResponse(BaseModel):
     database: str
     n8n_integration: Dict[str, Any]
     timestamp: datetime
+
+# Métricas Reais do Sistema (SQLite)
+class SystemMetricsResponse(BaseModel):
+    totalFontes: int
+    relacionamentosIdentificados: int
+    planosAprovados: int
+    planosPendentes: int
+    pipelinesExecutados: int
+    execucoesConcluidas: int
+    taxaAutoMatch: float
+    qualidadeMedia: float
+    tempoMedioDescoberta: Optional[str] = None

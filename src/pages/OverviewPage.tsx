@@ -1,3 +1,4 @@
+﻿import { Icon } from '../components/common/Icon';
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSynapse } from '../context/SynapseContext';
@@ -5,6 +6,8 @@ import { useSynapse } from '../context/SynapseContext';
 export const OverviewPage: React.FC = () => {
   const navigate = useNavigate();
   const { metrics, dataSources, candidates, setIsUploadModalOpen } = useSynapse();
+  const totalRecords = dataSources.reduce((total, source) => total + source.rowCount, 0);
+  const totalColumns = dataSources.reduce((total, source) => total + source.columnCount, 0);
 
   return (
     <div className="space-y-space-lg bg-grid-dots pb-12">
@@ -21,21 +24,21 @@ export const OverviewPage: React.FC = () => {
             onClick={() => setIsUploadModalOpen(true)}
             className="h-8 px-space-md rounded bg-surface-container border border-outline-variant text-on-surface hover:border-secondary text-xs flex items-center gap-1.5 transition-colors"
           >
-            <span className="material-symbols-outlined text-[15px] text-secondary">add_link</span>
+            <Icon name="add_link" className="text-[15px] text-secondary" />
             <span>Conectar Fonte de Dados</span>
           </button>
           <button 
             onClick={() => navigate('/pipelines')}
             className="h-8 px-space-md rounded bg-surface-container border border-outline-variant text-on-surface hover:border-primary text-xs flex items-center gap-1.5 transition-colors"
           >
-            <span className="material-symbols-outlined text-[15px] text-primary">account_tree</span>
-            <span>Novo Pipeline</span>
+            <Icon name="account_tree" className="text-[15px] text-primary" />
+            <span>Abrir Pipelines</span>
           </button>
           <button 
             onClick={() => navigate('/workspace')}
             className="h-8 px-space-md rounded bg-primary text-on-primary text-xs font-semibold flex items-center gap-1.5 hover:shadow-teal-glow transition-all"
           >
-            <span className="material-symbols-outlined text-[15px]">hub</span>
+            <Icon name="hub" className="text-[15px]" />
             <span>Explorar Workspace</span>
           </button>
         </div>
@@ -47,21 +50,17 @@ export const OverviewPage: React.FC = () => {
         <div className="bg-surface-container-low border border-outline-variant rounded p-space-md flex flex-col justify-between hover:border-primary/40 transition-colors">
           <div className="flex items-center justify-between text-code-compact text-xs">
             <span className="text-on-surface-variant flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-[15px] text-primary">database</span>
+              <Icon name="database" className="text-[15px] text-primary" />
               Fontes Conectadas
             </span>
             <span className="px-1.5 py-0.5 rounded bg-primary-container/10 border border-primary/30 text-primary text-[10px] font-semibold">
-              +{dataSources.length} ativas
+              {dataSources.length} listada(s)
             </span>
           </div>
           <div className="my-space-sm flex items-baseline justify-between">
             <span className="text-3xl font-bold text-on-surface tracking-tight font-code-compact">
-              0{dataSources.length}
+              {metrics.totalFontes}
             </span>
-            <svg className="w-24 h-7 text-primary" fill="none" viewBox="0 0 100 30">
-              <path d="M0 24 L18 20 L36 22 L54 14 L72 16 L90 8 L100 6" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"></path>
-              <path d="M0 24 L18 20 L36 22 L54 14 L72 16 L90 8 L100 6 L100 30 L0 30 Z" fill="currentColor" fillOpacity="0.08"></path>
-            </svg>
           </div>
           <div className="pt-space-xs border-t border-outline-variant/60 flex flex-wrap gap-1">
             {dataSources.slice(0, 4).map(ds => (
@@ -76,25 +75,21 @@ export const OverviewPage: React.FC = () => {
         <div className="bg-surface-container-low border border-outline-variant rounded p-space-md flex flex-col justify-between hover:border-secondary/40 transition-colors">
           <div className="flex items-center justify-between text-code-compact text-xs">
             <span className="text-on-surface-variant flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-[15px] text-secondary">schema</span>
+              <Icon name="schema" className="text-[15px] text-secondary" />
               Relações Identificadas
             </span>
             <span className="px-1.5 py-0.5 rounded bg-secondary-container/20 border border-secondary/40 text-secondary text-[10px] font-semibold">
-              94% confiança média
+              {metrics.planosPendentes} pendente(s)
             </span>
           </div>
           <div className="my-space-sm flex items-baseline justify-between">
             <span className="text-3xl font-bold text-on-surface tracking-tight font-code-compact">
               {metrics.relacionamentosIdentificados}
             </span>
-            <svg className="w-24 h-7 text-secondary" fill="none" viewBox="0 0 100 30">
-              <path d="M0 26 L20 22 L40 18 L60 12 L80 14 L100 4" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"></path>
-              <path d="M0 26 L20 22 L40 18 L60 12 L80 14 L100 4 L100 30 L0 30 Z" fill="currentColor" fillOpacity="0.08"></path>
-            </svg>
           </div>
           <div className="pt-space-xs border-t border-outline-variant/60 flex items-center justify-between text-[11px] font-code-compact">
-            <span className="text-on-surface-variant">Preditivas: <strong className="text-primary">12</strong></span>
-            <span className="text-on-surface-variant">Aprovadas: <strong className="text-secondary">2</strong></span>
+            <span className="text-on-surface-variant">Planos: <strong className="text-primary">{metrics.relacionamentosIdentificados}</strong></span>
+            <span className="text-on-surface-variant">Aprovados: <strong className="text-secondary">{metrics.planosAprovados}</strong></span>
           </div>
         </div>
 
@@ -102,25 +97,21 @@ export const OverviewPage: React.FC = () => {
         <div className="bg-surface-container-low border border-outline-variant rounded p-space-md flex flex-col justify-between hover:border-primary/40 transition-colors">
           <div className="flex items-center justify-between text-code-compact text-xs">
             <span className="text-on-surface-variant flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-[15px] text-primary">account_tree</span>
-              Pipelines Ativos
+              <Icon name="account_tree" className="text-[15px] text-primary" />
+              Pipelines Executados
             </span>
             <span className="px-1.5 py-0.5 rounded bg-primary-container/10 border border-primary/30 text-primary text-[10px] font-semibold">
-              100% Saudáveis
+              {metrics.execucoesConcluidas} execução(ões)
             </span>
           </div>
           <div className="my-space-sm flex items-baseline justify-between">
             <span className="text-3xl font-bold text-on-surface tracking-tight font-code-compact">
-              0{metrics.pipelinesAtivos}
+              {metrics.pipelinesExecutados}
             </span>
-            <svg className="w-24 h-7 text-primary" fill="none" viewBox="0 0 100 30">
-              <path d="M0 15 L25 15 L50 15 L75 10 L100 8" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"></path>
-              <path d="M0 15 L25 15 L50 15 L75 10 L100 8 L100 30 L0 30 Z" fill="currentColor" fillOpacity="0.08"></path>
-            </svg>
           </div>
           <div className="pt-space-xs border-t border-outline-variant/60 flex items-center justify-between text-[11px] font-code-compact">
-            <span className="text-on-surface-variant">Vazão: <strong className="text-on-surface">1.2M reg/dia</strong></span>
-            <span className="text-primary">Latência: 45ms</span>
+            <span className="text-on-surface-variant">Registros catalogados: <strong className="text-on-surface">{totalRecords.toLocaleString('pt-BR')}</strong></span>
+            <span className="text-primary">Match médio: {metrics.taxaAutoMatch}%</span>
           </div>
         </div>
 
@@ -128,25 +119,20 @@ export const OverviewPage: React.FC = () => {
         <div className="bg-surface-container-low border border-outline-variant rounded p-space-md flex flex-col justify-between hover:border-primary/40 transition-colors">
           <div className="flex items-center justify-between text-code-compact text-xs">
             <span className="text-on-surface-variant flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-[15px] text-emerald-400">verified</span>
+              <Icon name="verified" className="text-[15px] text-emerald-400" />
               Qualidade dos Dados
             </span>
             <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-semibold">
-              SLA Conforme
+              {totalColumns} coluna(s)
             </span>
           </div>
           <div className="my-space-sm flex items-baseline justify-between">
             <span className="text-3xl font-bold text-on-surface tracking-tight font-code-compact">
               {metrics.qualidadeMedia}%
             </span>
-            <svg className="w-24 h-7 text-emerald-400" fill="none" viewBox="0 0 100 30">
-              <path d="M0 20 L20 18 L40 10 L60 8 L80 6 L100 4" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"></path>
-              <path d="M0 20 L20 18 L40 10 L60 8 L80 6 L100 4 L100 30 L0 30 Z" fill="currentColor" fillOpacity="0.08"></path>
-            </svg>
           </div>
           <div className="pt-space-xs border-t border-outline-variant/60 flex items-center justify-between text-[11px] font-code-compact">
-            <span className="text-on-surface-variant">Nulos tratados: <strong className="text-emerald-400">99.8%</strong></span>
-            <span className="text-on-surface-variant">Inconsistências: <strong className="text-on-surface">0</strong></span>
+            <span className="text-on-surface-variant">Completude calculada sobre os metadados reais</span>
           </div>
         </div>
       </section>
@@ -154,13 +140,13 @@ export const OverviewPage: React.FC = () => {
       {/* 3. Seção Intermediária: Topologia Ativa e Descoberta Inteligente */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-space-md">
         {/* Painel Esquerdo: Relação Destaque Descoberta Heurística */}
-        <div className="lg:col-span-7 bg-surface-container-low border border-outline-variant rounded-lg p-space-md flex flex-col justify-between">
+        <div className="lg:col-span-7 self-start bg-surface-container-low border border-outline-variant rounded-lg p-space-md flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between border-b border-outline-variant/60 pb-space-sm mb-space-md">
               <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary text-[20px]">auto_awesome</span>
+                <Icon name="auto_awesome" className="text-primary text-[20px]" />
                 <span className="text-sm font-semibold text-on-surface">
-                  Descoberta Preditiva em Destaque
+                  Descoberta Heurística em Destaque
                 </span>
                 <span className="px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/25 text-[10px] font-code-compact">
                   Heurística Ativa
@@ -170,8 +156,8 @@ export const OverviewPage: React.FC = () => {
                 onClick={() => navigate('/discovery')}
                 className="text-xs text-primary hover:underline flex items-center gap-1 font-medium"
               >
-                <span>Ver todas as 3 sugestões</span>
-                <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+                <span>{candidates.length > 0 ? `Ver ${candidates.length} sugestão(ões)` : 'Abrir descoberta'}</span>
+                <Icon name="arrow_forward" className="text-[14px]" />
               </button>
             </div>
 
@@ -181,7 +167,7 @@ export const OverviewPage: React.FC = () => {
                   <div className="flex items-center gap-2 text-xs font-code-compact">
                     <span className="text-secondary font-semibold">{candidates[0].sourceDataSourceName.split(' ')[0]}</span>
                     <span className="text-primary font-bold">.{candidates[0].sourceColumn}</span>
-                    <span className="material-symbols-outlined text-[14px] text-outline">swap_horiz</span>
+                    <Icon name="swap_horiz" className="text-[14px] text-outline" />
                     <span className="text-secondary font-semibold">{candidates[0].targetDataSourceName.split(' ')[0]}</span>
                     <span className="text-primary font-bold">.{candidates[0].targetColumn}</span>
                   </div>
@@ -201,13 +187,27 @@ export const OverviewPage: React.FC = () => {
                   </div>
                   <div className="bg-surface-container-lowest p-2 rounded">
                     <span className="text-on-surface-variant block text-[10px]">Afinidade Semântica:</span>
-                    <span className="text-secondary font-semibold">{(candidates[0].fatores.similaridadeSemanticaNome * 100).toFixed(0)}%</span>
+                    <span className="text-secondary font-semibold">
+                      {candidates[0].fatores.similaridadeSemanticaNome == null
+                        ? 'Não informado'
+                        : `${(candidates[0].fatores.similaridadeSemanticaNome * 100).toFixed(0)}%`}
+                    </span>
                   </div>
                   <div className="bg-surface-container-lowest p-2 rounded">
                     <span className="text-on-surface-variant block text-[10px]">Status:</span>
-                    <span className="text-amber-400 font-semibold">Aguardando Aprovação</span>
+                    <span className="text-amber-400 font-semibold">{candidates[0].status}</span>
                   </div>
                 </div>
+              </div>
+            )}
+            {!candidates[0] && (
+              <div className="rounded border border-dashed border-outline-variant bg-surface-container-lowest p-6 text-center">
+                <Icon name="manage_search" className="mx-auto h-7 w-7 text-outline" />
+                <p className="mt-2 text-sm font-semibold text-on-surface">Nenhuma descoberta ativa nesta sessão</p>
+                <p className="mt-1 text-xs text-on-surface-variant">Selecione duas fontes e execute a descoberta para preencher este painel com evidências reais.</p>
+                <button onClick={() => navigate('/discovery')} className="mt-4 rounded bg-primary px-3 py-1.5 text-xs font-semibold text-on-primary">
+                  Iniciar descoberta
+                </button>
               </div>
             )}
           </div>
@@ -217,8 +217,8 @@ export const OverviewPage: React.FC = () => {
               onClick={() => navigate('/discovery')}
               className="px-3 py-1.5 rounded bg-primary text-on-primary text-xs font-semibold hover:shadow-teal-glow transition-all flex items-center gap-1.5"
             >
-              <span className="material-symbols-outlined text-[16px]">visibility</span>
-              <span>Inspecionar Evidências e Aprovar</span>
+              <Icon name="visibility" className="text-[16px]" />
+              <span>{candidates[0] ? 'Inspecionar evidências' : 'Abrir descoberta'}</span>
             </button>
           </div>
         </div>
@@ -228,7 +228,7 @@ export const OverviewPage: React.FC = () => {
           <div>
             <div className="flex items-center justify-between border-b border-outline-variant/60 pb-space-sm mb-space-md">
               <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-secondary text-[20px]">dns</span>
+                <Icon name="dns" className="text-secondary text-[20px]" />
                 <span className="text-sm font-semibold text-on-surface">Topologia de Fontes</span>
               </div>
               <button 
@@ -236,17 +236,15 @@ export const OverviewPage: React.FC = () => {
                 className="text-xs text-secondary hover:underline flex items-center gap-1 font-medium"
               >
                 <span>Gerenciar</span>
-                <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+                <Icon name="arrow_forward" className="text-[14px]" />
               </button>
             </div>
 
             <div className="space-y-2">
-              {dataSources.map(ds => (
+              {dataSources.slice(0, 8).map(ds => (
                 <div key={ds.id} className="p-2 rounded bg-surface-container border border-outline-variant flex items-center justify-between text-xs">
                   <div className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-primary text-[16px]">
-                      {ds.sourceType === 'postgresql' ? 'database' : ds.sourceType === 'excel' ? 'table_chart' : 'cloud'}
-                    </span>
+                    <Icon name={ds.sourceType === 'postgresql' ? 'database' : ds.sourceType === 'excel' ? 'table_chart' : 'cloud'} className="w-4 h-4 text-primary" />
                     <div>
                       <div className="text-on-surface font-medium">{ds.name}</div>
                       <div className="text-[10px] text-on-surface-variant font-code-compact">
@@ -255,17 +253,22 @@ export const OverviewPage: React.FC = () => {
                     </div>
                   </div>
                   <div className="flex items-center gap-1 text-[10px] font-code-compact text-primary">
-                    <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
-                    <span>{ds.lastSync}</span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-primary"></span>
+                    <span>Atualizada {new Date(ds.updatedAt).toLocaleDateString('pt-BR')}</span>
                   </div>
                 </div>
               ))}
+              {dataSources.length > 8 && (
+                <button onClick={() => navigate('/datasources')} className="w-full rounded border border-outline-variant px-3 py-2 text-xs text-primary hover:border-primary">
+                  Ver mais {dataSources.length - 8} fonte(s)
+                </button>
+              )}
             </div>
           </div>
 
           <div className="pt-space-md border-t border-outline-variant/60 mt-space-md flex items-center justify-between text-xs">
-            <span className="text-on-surface-variant">Sincronizador Automático:</span>
-            <span className="text-primary font-code-compact font-semibold">ATIVO (Ciclos a cada 60s)</span>
+            <span className="text-on-surface-variant">Catálogo retornado pela API:</span>
+            <span className="text-primary font-code-compact font-semibold">{dataSources.length} fonte(s)</span>
           </div>
         </div>
       </div>

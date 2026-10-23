@@ -1,6 +1,8 @@
 import unittest
 from pathlib import Path
 import httpx
+from app.database import SessionLocal
+from app.models import AnalysisPlanModel
 
 BASE_URL = "http://localhost:8000/api/v1"
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
@@ -12,6 +14,14 @@ class TestSynapseGovernanceEdgeCases(unittest.TestCase):
     def tearDown(self):
         self.client.close()
 
+    @staticmethod
+    def _remove_plan(plan_id: str):
+        with SessionLocal() as db:
+            plan = db.query(AnalysisPlanModel).filter(AnalysisPlanModel.id == plan_id).first()
+            if plan:
+                db.delete(plan)
+                db.commit()
+
     def test_rejection_flow_blocks_execution(self):
         """Valida que um plano formalmente REJEITADO não pode ser executado."""
         sources = self.client.get("/sources").json()
@@ -22,6 +32,7 @@ class TestSynapseGovernanceEdgeCases(unittest.TestCase):
         plan_resp = self.client.post("/discovery/analyze", json={"source_a_id": s_a, "source_b_id": s_b})
         self.assertEqual(plan_resp.status_code, 200)
         plan_id = plan_resp.json()["plan_id"]
+        self.addCleanup(self._remove_plan, plan_id)
 
         # Rejeita formalmente o plano
         decide_resp = self.client.post("/governance/decide", json={

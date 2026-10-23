@@ -1,66 +1,37 @@
 import React from 'react';
+import { Icon } from '../components/common/Icon';
 import { useSynapse } from '../context/SynapseContext';
 
 export const QualityPage: React.FC = () => {
-  const { metrics } = useSynapse();
-
-  const auditRules = [
-    { id: 'rule-1', name: 'Validação de CPF e Dígitos Verificadores', status: 'PASS', score: '100%', affected: 0, desc: 'Algoritmo Módulo 11 executado em 14.820 registros sem anomalias.' },
-    { id: 'rule-2', name: 'Detecção de Pagamentos Órfãos', status: 'WARN', score: '99.8%', affected: 1, desc: 'Identificado 1 pagamento (matrícula 1004 / 1006) sem funcionário correspondente.' },
-    { id: 'rule-3', name: 'Verificação de Servidores Sem Pagamento', status: 'WARN', score: '99.8%', affected: 1, desc: 'Funcionária Carla Dias (MATVINC 1003) sem remuneração lançada na competência 2026-10.' },
-    { id: 'rule-4', name: 'Consistência de Tipagem Numérica', status: 'PASS', score: '100%', affected: 0, desc: 'Zeros à esquerda tratados e normalizados em formato inteiro de 32/64 bits.' },
-    { id: 'rule-5', name: 'Taxa de Nulos em Atributos Obrigatórios', status: 'PASS', score: '99.9%', affected: 2, desc: 'Valores em campos de lotação e cargo dentro da margem de tolerância SLA.' },
-  ];
+  const { metrics, dataSources } = useSynapse();
+  const assessments = dataSources.map(source => {
+    const completeness = source.columns.length
+      ? 100 * (1 - source.columns.reduce((total, column) => total + column.nullRatio, 0) / source.columns.length)
+      : 0;
+    const columnsWithNulls = source.columns.filter(column => column.nullRatio > 0);
+    return { source, completeness: Number(completeness.toFixed(1)), columnsWithNulls };
+  });
 
   return (
-    <div className="space-y-space-lg max-w-7xl mx-auto pb-12">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-space-sm border-b border-outline-variant">
+    <div className="mx-auto max-w-7xl space-y-space-lg pb-12">
+      <div className="flex flex-col gap-4 border-b border-outline-variant pb-space-sm sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-bold tracking-tight text-on-surface">Auditoria & Qualidade de Dados</h1>
-          <p className="text-xs text-on-surface-variant mt-0.5">
-            Monitoramento de conformidade de esquemas, integridade referencial e detecção de anomalias.
-          </p>
+          <p className="mt-0.5 text-xs text-on-surface-variant">Indicadores calculados dos metadados reais produzidos durante a importação.</p>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="px-2.5 py-1 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-bold text-xs font-code-compact">
-            SLA Geral: {metrics.qualidadeMedia}%
-          </span>
-        </div>
+        <span className="rounded border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-bold font-code-compact text-emerald-400">Completude média: {metrics.qualidadeMedia}%</span>
       </div>
 
-      {/* Regras de Auditoria */}
+      {!assessments.length && <div className="rounded-lg border border-outline-variant bg-surface-container-low p-8 text-center text-xs text-on-surface-variant">Importe uma fonte para calcular indicadores de qualidade.</div>}
       <div className="space-y-3">
-        {auditRules.map(rule => (
-          <div key={rule.id} className="p-space-md rounded-lg border border-outline-variant bg-surface-container-low flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div className="flex items-start gap-3">
-              <span className={`material-symbols-outlined text-[20px] mt-0.5 ${rule.status === 'PASS' ? 'text-emerald-400' : 'text-amber-400'}`}>
-                {rule.status === 'PASS' ? 'check_circle' : 'warning'}
-              </span>
-              <div>
-                <div className="text-xs font-bold text-on-surface flex items-center gap-2">
-                  <span>{rule.name}</span>
-                  <span className={`px-1.5 py-0.2 rounded text-[9px] font-code-compact font-bold ${
-                    rule.status === 'PASS' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
-                  }`}>
-                    {rule.status === 'PASS' ? 'APROVADO' : 'ALERTA REQUER ATENÇÃO'}
-                  </span>
-                </div>
-                <p className="text-xs text-on-surface-variant mt-1">{rule.desc}</p>
-              </div>
+        {assessments.map(({ source, completeness, columnsWithNulls }) => (
+          <article key={source.id} className="flex flex-col gap-4 rounded-lg border border-outline-variant bg-surface-container-low p-space-md md:flex-row md:items-center md:justify-between">
+            <div className="flex min-w-0 items-start gap-3">
+              <Icon name={columnsWithNulls.length ? 'warning' : 'check_circle'} className={`mt-0.5 h-5 w-5 shrink-0 ${columnsWithNulls.length ? 'text-amber-400' : 'text-emerald-400'}`} />
+              <div className="min-w-0"><h2 className="truncate text-xs font-bold text-on-surface">{source.name}</h2><p className="break-all font-code-compact text-[10px] text-secondary">ID {source.id}</p><p className="mt-1 text-xs text-on-surface-variant">{source.columnCount} coluna(s) analisadas · {columnsWithNulls.length} coluna(s) com valores nulos.</p></div>
             </div>
-
-            <div className="flex items-center gap-4 text-xs font-code-compact self-end md:self-auto shrink-0">
-              <div className="text-right">
-                <span className="text-[10px] text-on-surface-variant block">Conformidade:</span>
-                <span className="font-bold text-primary">{rule.score}</span>
-              </div>
-              <div className="text-right">
-                <span className="text-[10px] text-on-surface-variant block">Registros com Alerta:</span>
-                <span className={`font-bold ${rule.affected > 0 ? 'text-amber-400' : 'text-on-surface'}`}>{rule.affected}</span>
-              </div>
-            </div>
-          </div>
+            <div className="flex shrink-0 gap-4 text-right text-xs font-code-compact"><div><span className="block text-[10px] text-on-surface-variant">Completude</span><strong className="text-primary">{completeness}%</strong></div><div><span className="block text-[10px] text-on-surface-variant">Registros</span><strong>{source.rowCount.toLocaleString('pt-BR')}</strong></div></div>
+          </article>
         ))}
       </div>
     </div>

@@ -1,4 +1,15 @@
-import type { DataSource, RelationshipCandidate, Pipeline, SystemMetrics } from '../types/synapse';
+﻿import type {
+  AnalysisPlan,
+  DataSource,
+  DataSourceDependencies,
+  DataSourceBulkImpact,
+  DataSourcePreview,
+  GovernanceDecision,
+  Pipeline,
+  PipelineExecution,
+  PipelineExecutionSummary,
+  SystemMetrics,
+} from '../types/synapse';
 
 /**
  * Camada de Serviços da API do SYNAPSE AI integrada ao Backend FastAPI + n8n.
@@ -15,7 +26,47 @@ import type { DataSource, RelationshipCandidate, Pipeline, SystemMetrics } from 
  * garantem o funcionamento ininterrupto da interface.
  */
 
-export const BACKEND_URL = 'http://localhost:8000/api/v1';
+export const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1';
+const AUTH_TOKEN_KEY = 'synapse_operator_token';
+
+export const getStoredAuthToken = (): string => {
+  if (typeof window === 'undefined') return '';
+  return window.sessionStorage.getItem(AUTH_TOKEN_KEY) ?? '';
+};
+
+export const setStoredAuthToken = (token: string): void => {
+  if (typeof window === 'undefined') return;
+  if (token) window.sessionStorage.setItem(AUTH_TOKEN_KEY, token);
+  else window.sessionStorage.removeItem(AUTH_TOKEN_KEY);
+  window.dispatchEvent(new Event('synapse-auth-change'));
+};
+
+const readApiError = async (response: Response, fallback: string): Promise<string> => {
+  try {
+    const body = await response.json() as { detail?: string };
+    return body.detail || fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+const request = async (path: string, init: RequestInit, timeoutMs: number): Promise<Response> => {
+  try {
+    const headers = new Headers(init.headers);
+    const token = getStoredAuthToken();
+    if (token) headers.set('Authorization', `Bearer ${token}`);
+    return await fetch(`${BACKEND_URL}${path}`, {
+      ...init,
+      headers,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'TimeoutError') {
+      throw new Error(`FastAPI não respondeu dentro de ${Math.round(timeoutMs / 1000)}s.`);
+    }
+    throw new Error('FastAPI indisponível em 127.0.0.1:8000. Verifique se o backend está online.');
+  }
+};
 
 export const N8N_WORKFLOW_REFS = {
   DATA_BRIDGE_POC: 'WvgldAqi81hUMq58',
@@ -23,134 +74,20 @@ export const N8N_WORKFLOW_REFS = {
   INTEGRATION_STATUS: 'FASTAPI_GATEWAY_ACTIVE'
 } as const;
 
-// Dados de demonstração padrão do sistema para inicialização rápida e offline fallback
-export const INITIAL_METRICS: SystemMetrics = {
-  totalFontes: 8,
-  relacionamentosIdentificados: 14,
-  pipelinesAtivos: 6,
-  qualidadeMedia: 99.4,
-  taxaAutoMatch: 96.8,
-  tempoMedioDescoberta: '4.2s',
-  clustersOnline: 4,
-};
-
-export const INITIAL_DATA_SOURCES: DataSource[] = [
-  {
-    id: 'ds-postgres-comercial',
-    name: 'PostgreSQL (Comercial / RH)',
-    sourceType: 'postgresql',
-    description: 'Tabelas centrais de funcionários, lotação e folha funcional.',
-    rowCount: 14820,
-    columnCount: 16,
-    status: 'ACTIVE',
-    lastSync: 'há 12 min',
-    columns: [
-      { name: 'MATVINC', type: 'integer', nullRatio: 0.0, uniquenessRatio: 1.0, sampleValues: ['1001', '1002', '1003', '1004', '1005'] },
-      { name: 'NOME_SERVIDOR', type: 'string', nullRatio: 0.0, uniquenessRatio: 0.98, sampleValues: ['Ana Silva', 'Bruno Costa', 'Carla Dias', 'Daniel Lima'] },
-      { name: 'SETOR', type: 'string', nullRatio: 0.02, uniquenessRatio: 0.05, sampleValues: ['TI', 'RH', 'Financeiro', 'Operações'] },
-      { name: 'CARGO', type: 'string', nullRatio: 0.0, uniquenessRatio: 0.12, sampleValues: ['Analista', 'Engenheiro', 'Coordenador'] }
-    ]
-  },
-  {
-    id: 'ds-excel-pagamentos',
-    name: 'Excel (Remuneração & Benefícios)',
-    sourceType: 'excel',
-    description: 'Planilha contábil de depósitos e competências mensais.',
-    rowCount: 14790,
-    columnCount: 12,
-    status: 'ACTIVE',
-    lastSync: 'há 32 seg',
-    columns: [
-      { name: 'matricula_funcional', type: 'integer', nullRatio: 0.0, uniquenessRatio: 1.0, sampleValues: ['1001', '1002', '1004', '1005', '1006'] },
-      { name: 'valor_pagamento', type: 'float', nullRatio: 0.0, uniquenessRatio: 0.85, sampleValues: ['2500.0', '3100.0', '2800.0', '4200.0'] },
-      { name: 'competencia', type: 'string', nullRatio: 0.0, uniquenessRatio: 0.01, sampleValues: ['2026-10', '2026-10', '2026-10'] },
-      { name: 'cod_banco', type: 'integer', nullRatio: 0.01, uniquenessRatio: 0.03, sampleValues: ['1', '104', '341', '237'] }
-    ]
-  },
-  {
-    id: 'ds-snowflake-analytics',
-    name: 'Snowflake (Data Lake DW)',
-    sourceType: 'snowflake',
-    description: 'Repositório histórico analítico de transações e conciliações.',
-    rowCount: 2450000,
-    columnCount: 48,
-    status: 'ACTIVE',
-    lastSync: 'há 2 horas',
-    columns: [
-      { name: 'cpf_anonimizado', type: 'string', nullRatio: 0.0, uniquenessRatio: 1.0, sampleValues: ['***.491.823-**', '***.289.304-**'] },
-      { name: 'exercicio_fiscal', type: 'integer', nullRatio: 0.0, uniquenessRatio: 0.01, sampleValues: ['2024', '2025', '2026'] }
-    ]
-  },
-  {
-    id: 'ds-sap-erp',
-    name: 'SAP ERP (Controladoria)',
-    sourceType: 'sap',
-    description: 'Centro de custos e plano de contas orçamentário.',
-    rowCount: 89000,
-    columnCount: 32,
-    status: 'IDLE',
-    lastSync: 'ontem',
-    columns: [
-      { name: 'ID_CONTRATO', type: 'string', nullRatio: 0.0, uniquenessRatio: 1.0, sampleValues: ['CT-2026-001', 'CT-2026-002'] }
-    ]
-  }
-];
-
-export const INITIAL_CANDIDATES: RelationshipCandidate[] = [
-  {
-    id: 'rel-matvinc-matricula',
-    sourceDataSourceId: 'ds-postgres-comercial',
-    sourceDataSourceName: 'PostgreSQL (Comercial / RH)',
-    sourceColumn: 'MATVINC',
-    targetDataSourceId: 'ds-excel-pagamentos',
-    targetDataSourceName: 'Excel (Remuneração & Benefícios)',
-    targetColumn: 'matricula_funcional',
-    score: 82.0,
-    classificacao: 'CANDIDATO_RECOMENDADO',
-    confianca: 'ALTA',
-    status: 'PROPOSTO_AGUARDANDO_APROVACAO',
-    tipoRelacao: '1:1',
-    algoritmo: 'Motor Heurístico SYNAPSE (Token Jaccard + Normalização de Dígitos + Overlap 67%)',
-    explicacao: 'A coluna MATVINC (PostgreSQL) e matricula_funcional (Excel) possuem compatibilidade estrita de tipo (integer), 85% de afinidade semântica de identificador de servidor e 67% de sobreposição determinística de valores no domínio amostrado.',
-    fatores: {
-      similaridadeSemanticaNome: 0.85,
-      compatibilidadeTipo: 1.0,
-      sobreposicaoValoresMin: 0.67,
-      jaccardValores: 0.50,
-      consistenciaUnicidade: 1.0,
-    },
-    evidencias: {
-      tipoA: 'integer',
-      tipoB: 'integer',
-      valoresEmComum: ['1001', '1002'],
-      qtdValoresEmComum: 2,
-      amostraValoresApenasEmA: ['1003 (Carla Dias — sem pagamento na competência)'],
-      amostraValoresApenasEmB: ['1004 (Matrícula em folha sem cadastro RH ativo)'],
-    },
-    joinPreview: [
-      { MATVINC: '1001', NOME_SERVIDOR: 'Ana Silva', SETOR: 'TI', valor_pagamento: 2500.0, competencia: '2026-10', status: 'CORRESPONDENCIA_ENCONTRADA' },
-      { MATVINC: '1002', NOME_SERVIDOR: 'Bruno Costa', SETOR: 'RH', valor_pagamento: 3100.0, competencia: '2026-10', status: 'CORRESPONDENCIA_ENCONTRADA' },
-      { MATVINC: '1003', NOME_SERVIDOR: 'Carla Dias', SETOR: 'Financeiro', valor_pagamento: null, competencia: null, status: 'SEM_PAGAMENTO' },
-    ]
-  }
-];
-
 export const INITIAL_PIPELINE: Pipeline = {
-  id: 'pipe-reconciliation-01',
-  name: 'Folha & Pagamentos Funcionais — Data Bridge n8n',
-  cluster: 'Cluster Prod-Alpha',
-  version: '1.2.0',
+  id: 'data-bridge-unconfigured',
+  name: 'Data Bridge — aguardando plano aprovado',
+  cluster: 'n8n local',
+  version: N8N_WORKFLOW_REFS.DATA_BRIDGE_POC,
   status: 'PRONTO',
   nodes: [
     {
       id: 'node-ingest-rh',
-      label: 'Ingestão PostgreSQL RH',
+      label: 'Fonte de origem',
       nodeType: 'SOURCE',
       category: 'Extrator',
-      status: 'SUCCESS',
-      latency: '240ms',
-      itemsProcessed: 14820,
-      description: 'Leitura da tabela de servidores e lotações funcionais',
+      status: 'IDLE',
+      description: 'Fonte definida pelo plano ativo',
       x: 100,
       y: 120,
       inputs: [],
@@ -158,13 +95,11 @@ export const INITIAL_PIPELINE: Pipeline = {
     },
     {
       id: 'node-ingest-fin',
-      label: 'Ingestão Excel Pagamentos',
+      label: 'Fonte de destino',
       nodeType: 'SOURCE',
       category: 'Extrator',
-      status: 'SUCCESS',
-      latency: '180ms',
-      itemsProcessed: 14790,
-      description: 'Leitura contábil das ordens bancárias de pagamento',
+      status: 'IDLE',
+      description: 'Fonte definida pelo plano ativo',
       x: 100,
       y: 320,
       inputs: [],
@@ -172,13 +107,11 @@ export const INITIAL_PIPELINE: Pipeline = {
     },
     {
       id: 'node-norm-01',
-      label: 'Normalização MATVINC',
+      label: 'Preparação da origem',
       nodeType: 'TRANSFORM',
       category: 'Transformador',
-      status: 'SUCCESS',
-      latency: '95ms',
-      itemsProcessed: 14820,
-      description: 'Limpeza de zeros à esquerda e casting numérico',
+      status: 'IDLE',
+      description: 'Etapa visual; telemetria não fornecida pela API',
       x: 360,
       y: 120,
       inputs: ['node-ingest-rh'],
@@ -186,13 +119,11 @@ export const INITIAL_PIPELINE: Pipeline = {
     },
     {
       id: 'node-norm-02',
-      label: 'Normalização Matrícula',
+      label: 'Preparação do destino',
       nodeType: 'TRANSFORM',
       category: 'Transformador',
-      status: 'SUCCESS',
-      latency: '82ms',
-      itemsProcessed: 14790,
-      description: 'Normalização de chaves de vinculação funcional',
+      status: 'IDLE',
+      description: 'Etapa visual; telemetria não fornecida pela API',
       x: 360,
       y: 320,
       inputs: ['node-ingest-fin'],
@@ -204,8 +135,6 @@ export const INITIAL_PIPELINE: Pipeline = {
       nodeType: 'JOIN',
       category: 'Reconciliador',
       status: 'IDLE',
-      latency: '1.2s',
-      itemsProcessed: 14820,
       description: 'Execução do workflow n8n WvgldAqi81hUMq58 para reconciliação',
       x: 640,
       y: 220,
@@ -214,13 +143,11 @@ export const INITIAL_PIPELINE: Pipeline = {
     },
     {
       id: 'node-sink-analytics',
-      label: 'Data Lake Snowflake',
+      label: 'Resultado da API',
       nodeType: 'EXPORT',
       category: 'Destino',
       status: 'IDLE',
-      latency: '0ms',
-      itemsProcessed: 0,
-      description: 'Publicação no data lake analítico',
+      description: 'Resultado auditável retornado pelo FastAPI',
       x: 920,
       y: 220,
       inputs: ['node-join-core'],
@@ -237,12 +164,22 @@ export const INITIAL_PIPELINE: Pipeline = {
 };
 
 export const apiService = {
+  verifyAccessToken: async (token: string): Promise<{ authenticated: boolean; role: string }> => {
+    const resp = await fetch(`${BACKEND_URL}/auth/verify`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!resp.ok) throw new Error(await readApiError(resp, 'Credencial inválida.'));
+    return await resp.json() as { authenticated: boolean; role: string };
+  },
+
   /**
    * Health check com o backend FastAPI.
    */
   checkBackendHealth: async (): Promise<{ status: string; n8n_reachable: boolean }> => {
     try {
-      const resp = await fetch(`${BACKEND_URL}/health`, { signal: AbortSignal.timeout(3000) });
+      const resp = await fetch(`${BACKEND_URL}/health`, { signal: AbortSignal.timeout(8000) });
       if (resp.ok) {
         const data = await resp.json();
         return { status: data.status, n8n_reachable: data.n8n_integration?.reachable ?? false };
@@ -254,194 +191,189 @@ export const apiService = {
   },
 
   getSystemMetrics: async (): Promise<SystemMetrics> => {
-    return { ...INITIAL_METRICS };
+    const resp = await request('/metrics', {}, 4000);
+    if (!resp.ok) {
+      throw new Error(await readApiError(resp, 'Não foi possível carregar as métricas reais.'));
+    }
+    return await resp.json() as SystemMetrics;
   },
 
   /**
    * Obtém fontes de dados cadastradas no backend real SQLite, com fallback local.
    */
-  getDataSources: async (): Promise<DataSource[]> => {
-    try {
-      const resp = await fetch(`${BACKEND_URL}/sources`, { signal: AbortSignal.timeout(4000) });
-      if (resp.ok) {
-        const data = await resp.json();
-        if (Array.isArray(data) && data.length > 0) {
-          return data;
-        }
-      }
-    } catch (e) {
-      console.warn('Backend indisponível, utilizando catálogo demonstrativo.', e);
+  getDataSources: async (includeArchived = false): Promise<DataSource[]> => {
+    const resp = await request(`/sources${includeArchived ? '?include_archived=true' : ''}`, {}, 4000);
+    if (!resp.ok) {
+      throw new Error(await readApiError(resp, 'Não foi possível carregar as fontes de dados.'));
     }
-    return [...INITIAL_DATA_SOURCES];
+    return await resp.json() as DataSource[];
+  },
+
+  getDataSourcePreview: async (sourceId: string, limit = 20): Promise<DataSourcePreview> => {
+    const resp = await request(`/sources/${encodeURIComponent(sourceId)}/preview?limit=${limit}`, {}, 10000);
+    if (!resp.ok) throw new Error(await readApiError(resp, 'Não foi possível visualizar a fonte.'));
+    return await resp.json() as DataSourcePreview;
+  },
+
+  renameDataSource: async (sourceId: string, name: string): Promise<DataSource> => {
+    const resp = await request(`/sources/${encodeURIComponent(sourceId)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    }, 10000);
+    if (!resp.ok) throw new Error(await readApiError(resp, 'Não foi possível renomear a fonte.'));
+    return await resp.json() as DataSource;
+  },
+
+  getDataSourceDependencies: async (sourceId: string): Promise<DataSourceDependencies> => {
+    const resp = await request(`/sources/${encodeURIComponent(sourceId)}/dependencies`, {}, 10000);
+    if (!resp.ok) throw new Error(await readApiError(resp, 'Não foi possível validar as dependências da fonte.'));
+    return await resp.json() as DataSourceDependencies;
+  },
+
+  getDataSourcesBulkImpact: async (sourceIds: string[]): Promise<DataSourceBulkImpact> => {
+    const resp = await request('/sources/bulk-impact', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source_ids: sourceIds }),
+    }, 10000);
+    if (!resp.ok) throw new Error(await readApiError(resp, 'Não foi possível calcular o impacto da operação.'));
+    return await resp.json() as DataSourceBulkImpact;
+  },
+
+  archiveDataSource: async (sourceId: string): Promise<DataSource> => {
+    const resp = await request(`/sources/${encodeURIComponent(sourceId)}/archive`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirm: true }),
+    }, 10000);
+    if (!resp.ok) throw new Error(await readApiError(resp, 'Não foi possível arquivar a fonte.'));
+    return await resp.json() as DataSource;
+  },
+
+  restoreDataSource: async (sourceId: string): Promise<DataSource> => {
+    const resp = await request(`/sources/${encodeURIComponent(sourceId)}/restore`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirm: true }),
+    }, 10000);
+    if (!resp.ok) throw new Error(await readApiError(resp, 'Não foi possível restaurar a fonte.'));
+    return await resp.json() as DataSource;
+  },
+
+  deleteDataSource: async (sourceId: string, deleteEligiblePlans = false): Promise<void> => {
+    const resp = await request(`/sources/${encodeURIComponent(sourceId)}/delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirm: true, delete_eligible_plans: deleteEligiblePlans }),
+    }, 10000);
+    if (!resp.ok) throw new Error(await readApiError(resp, 'Não foi possível excluir a fonte.'));
+  },
+
+  deleteDataSources: async (sourceIds: string[]): Promise<void> => {
+    const resp = await request('/sources/delete-batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source_ids: sourceIds, confirm: true }),
+    }, 15000);
+    if (!resp.ok) throw new Error(await readApiError(resp, 'Não foi possível excluir as fontes selecionadas.'));
   },
 
   /**
    * Realiza upload de arquivo (CSV/XLSX) enviando multipart/form-data para o backend real.
    */
   uploadSourceFile: async (file: File, customName?: string): Promise<DataSource> => {
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      if (customName) formData.append('custom_name', customName);
+    const formData = new FormData();
+    formData.append('file', file);
+    if (customName) formData.append('custom_name', customName);
 
-      const resp = await fetch(`${BACKEND_URL}/sources/upload`, {
-        method: 'POST',
-        body: formData,
-        signal: AbortSignal.timeout(10000)
-      });
+    const resp = await request('/sources/upload', {
+      method: 'POST',
+      body: formData,
+    }, 15000);
 
-      if (!resp.ok) {
-        const err = await resp.json();
-        throw new Error(err.detail || 'Falha no upload do arquivo');
-      }
-
-      return await resp.json();
-    } catch (e: unknown) {
-      console.warn('Falha no upload via backend, realizando parsing no navegador:', e);
-      // Fallback gracioso usando parsing local
-      return await apiService.processUploadedFileLocally(file.name, await file.text());
+    if (!resp.ok) {
+      throw new Error(await readApiError(resp, 'Falha no upload do arquivo.'));
     }
+
+    return await resp.json() as DataSource;
   },
 
   /**
    * Dispara a descoberta heurística chamando o workflow n8n (LHJTja7RuShTAcJo)
    * através da API do Backend FastAPI.
    */
-  analyzeRelationship: async (sourceAId: string, sourceBId: string) => {
-    try {
-      const resp = await fetch(`${BACKEND_URL}/discovery/analyze`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ source_a_id: sourceAId, source_b_id: sourceBId }),
-        signal: AbortSignal.timeout(15000)
-      });
+  analyzeRelationship: async (sourceAId: string, sourceBId: string): Promise<AnalysisPlan> => {
+    const resp = await request('/discovery/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source_a_id: sourceAId, source_b_id: sourceBId }),
+    }, 25000);
 
-      if (resp.ok) {
-        return await resp.json();
-      }
-    } catch (e) {
-      console.warn('Backend Discovery indisponível, utilizando simulação local:', e);
+    if (!resp.ok) {
+      throw new Error(await readApiError(
+        resp,
+        resp.status === 502
+          ? 'O workflow Intelligent Discovery no n8n está indisponível.'
+          : 'Falha ao analisar o relacionamento.',
+      ));
     }
-    return null;
-  },
-
-  getCandidates: async (): Promise<RelationshipCandidate[]> => {
-    return [...INITIAL_CANDIDATES];
-  },
-
-  getPipeline: async (): Promise<Pipeline> => {
-    return { ...INITIAL_PIPELINE };
+    return await resp.json() as AnalysisPlan;
   },
 
   /**
    * Aprovação de relação no Comitê de Governança.
    */
-  approveRelationship: async (candidateId: string, planId?: string): Promise<RelationshipCandidate> => {
-    if (planId) {
-      try {
-        await fetch(`${BACKEND_URL}/governance/decide`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            plan_id: planId,
-            approved: true,
-            reason: 'Relação funcional aprovada após auditoria de evidências de cardinalidade e tipos.',
-            approver: 'Dr. Fernando Souza (Auditor Chefe)'
-          })
-        });
-      } catch (e) {
-        console.warn('Aprovação local:', e);
-      }
+  decideGovernance: async (
+    planId: string,
+    approved: boolean,
+    reason: string,
+  ): Promise<GovernanceDecision> => {
+    const resp = await request('/governance/decide', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        plan_id: planId,
+        approved,
+        reason,
+        approver: 'Operador SYNAPSE AI',
+      }),
+    }, 10000);
+
+    if (!resp.ok) {
+      throw new Error(await readApiError(resp, 'A decisão de governança não pôde ser registrada.'));
     }
-
-    const candidate = INITIAL_CANDIDATES.find(c => c.id === candidateId) || INITIAL_CANDIDATES[0];
-    return { ...candidate, status: 'PLANO_APROVADO_EXECUTADO' };
-  },
-
-  /**
-   * Rejeição de relação com justificativa no Comitê de Governança.
-   */
-  rejectRelationship: async (candidateId: string, motivo: string, planId?: string): Promise<RelationshipCandidate> => {
-    if (planId) {
-      try {
-        await fetch(`${BACKEND_URL}/governance/decide`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            plan_id: planId,
-            approved: false,
-            reason: motivo,
-            approver: 'Dr. Fernando Souza (Auditor Chefe)'
-          })
-        });
-      } catch (e) {
-        console.warn('Rejeição local:', e);
-      }
-    }
-
-    const candidate = INITIAL_CANDIDATES.find(c => c.id === candidateId) || INITIAL_CANDIDATES[0];
-    return { ...candidate, status: 'REJEITADO_PELO_USUARIO', rejeicaoMotivo: motivo };
+    return await resp.json() as GovernanceDecision;
   },
 
   /**
    * Executa o JOIN real no n8n (Data Bridge POC WvgldAqi81hUMq58) via backend FastAPI.
    */
-  executePipeline: async (planId: string) => {
-    const resp = await fetch(`${BACKEND_URL}/pipelines/execute`, {
+  executePipeline: async (planId: string): Promise<PipelineExecution> => {
+    const resp = await request('/pipelines/execute', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ plan_id: planId }),
-      signal: AbortSignal.timeout(20000)
-    });
+    }, 30000);
 
     if (!resp.ok) {
-      const err = await resp.json();
-      throw new Error(err.detail || 'Falha na execução do pipeline no backend');
+      throw new Error(await readApiError(
+        resp,
+        resp.status === 502
+          ? 'O workflow Data Bridge no n8n está indisponível.'
+          : 'Falha na execução do pipeline.',
+      ));
     }
 
-    return await resp.json();
+    return await resp.json() as PipelineExecution;
   },
 
-  /**
-   * Fallback de parser local para suporte offline completo.
-   */
-  processUploadedFileLocally: async (fileName: string, rawText: string): Promise<DataSource> => {
-    const lines = rawText.split('\n').filter(l => l.trim().length > 0);
-    if (lines.length < 2) {
-      throw new Error('Arquivo vazio ou sem linhas de dados suficientes.');
-    }
+  listPipelineExecutions: async (): Promise<PipelineExecutionSummary[]> => {
+    const resp = await request('/pipelines/executions?limit=50', {}, 10000);
+    if (!resp.ok) throw new Error(await readApiError(resp, 'Não foi possível carregar o histórico de execuções.'));
+    return await resp.json() as PipelineExecutionSummary[];
+  },
 
-    const headers = lines[0].split(/[,;\t]/).map(h => h.trim().replace(/^["']|["']$/g, ''));
-    const rows = lines.slice(1, 101).map(l => l.split(/[,;\t]/).map(c => c.trim().replace(/^["']|["']$/g, '')));
+  getPipelineExecution: async (executionId: string): Promise<PipelineExecution> => {
+    const resp = await request(`/pipelines/executions/${encodeURIComponent(executionId)}`, {}, 10000);
+    if (!resp.ok) throw new Error(await readApiError(resp, 'Não foi possível carregar a execução.'));
+    return await resp.json() as PipelineExecution;
+  },
 
-    const columns = headers.map((header, colIdx) => {
-      const colValues = rows.map(r => r[colIdx] || '');
-      const isInt = colValues.every(v => /^[0-9]+$/.test(v) || v === '');
-      const isFloat = colValues.every(v => !isNaN(Number(v)) || v === '');
-      
-      const type = isInt ? 'integer' : (isFloat ? 'float' : 'string');
-      const distinct = new Set(colValues.filter(Boolean));
-
-      return {
-        name: header,
-        type: type as 'integer' | 'float' | 'string',
-        nullRatio: colValues.filter(v => v === '').length / (colValues.length || 1),
-        uniquenessRatio: distinct.size / (colValues.length || 1),
-        sampleValues: colValues.slice(0, 5)
-      };
-    });
-
-    return {
-      id: `ds-upload-${Date.now()}`,
-      name: fileName.replace(/\.[^/.]+$/, ''),
-      sourceType: fileName.endsWith('.xlsx') ? 'excel' : 'csv',
-      description: `Arquivo customizado (${lines.length - 1} registros detectados).`,
-      rowCount: lines.length - 1,
-      columnCount: headers.length,
-      status: 'ACTIVE',
-      lastSync: 'agora mesmo',
-      isCustomUpload: true,
-      columns
-    };
-  }
 };

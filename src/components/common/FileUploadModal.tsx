@@ -1,3 +1,4 @@
+﻿import { Icon } from './Icon';
 import React, { useState, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { useSynapse } from '../../context/SynapseContext';
@@ -99,7 +100,7 @@ export const FileUploadModal: React.FC = () => {
         {/* Modal Header */}
         <div className="px-space-md py-space-sm bg-surface-container border-b border-outline-variant flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-primary text-[20px]">upload_file</span>
+            <Icon name="upload_file" className="text-primary text-[20px]" />
             <span className="font-headline-sm font-semibold text-on-surface text-sm">
               Conectar Fonte de Dados (CSV / XLSX)
             </span>
@@ -109,7 +110,7 @@ export const FileUploadModal: React.FC = () => {
             aria-label="Fechar modal"
             className="text-on-surface-variant hover:text-on-surface p-1 rounded transition-colors"
           >
-            <span className="material-symbols-outlined text-[18px]">close</span>
+            <Icon name="close" className="text-[18px]" />
           </button>
         </div>
 
@@ -139,7 +140,7 @@ export const FileUploadModal: React.FC = () => {
               onChange={handleFileChange}
               className="hidden" 
             />
-            <span className="material-symbols-outlined text-[32px] text-secondary">cloud_upload</span>
+            <Icon name="cloud_upload" className="text-[32px] text-secondary" />
             <span className="text-xs text-on-surface font-medium">
               {selectedFile ? selectedFile.name : 'Clique ou arraste um arquivo CSV / XLSX aqui'}
             </span>
@@ -190,7 +191,7 @@ export const FileUploadModal: React.FC = () => {
                 </>
               ) : (
                 <>
-                  <span className="material-symbols-outlined text-[16px]">play_arrow</span>
+                  <Icon name="play_arrow" className="text-[16px]" />
                   <span>Processar e Analisar</span>
                 </>
               )}

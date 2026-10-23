@@ -67,3 +67,17 @@ class PipelineExecutionModel(Base):
     executed_at = Column(DateTime, default=datetime.utcnow)
 
     plan = relationship("AnalysisPlanModel", back_populates="executions")
+
+
+class AdministrativeAuditModel(Base):
+    """Trilha imutável das operações administrativas sobre fontes."""
+
+    __tablename__ = "administrative_audit_events"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    action = Column(String(100), nullable=False)
+    resource_type = Column(String(50), nullable=False)
+    resource_id = Column(String, nullable=True)
+    actor = Column(String(100), default="synapse-operator")
+    details = Column(JSON, default=dict)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

@@ -1,259 +1,201 @@
-# SYNAPSE AI — Sistemas que Entendem Sistemas
-> **Plataforma de Descoberta Heurística, Integração Segura e Governança Mandatória de Dados**  
-> *Projeto submetido ao Hackathon UNAMA 2026.2*
+<p align="center">
+  <img src="./public/favicon.svg" width="72" alt="Ícone do SYNAPSE AI">
+</p>
 
----
+# SYNAPSE AI
 
-## 1. Visão Geral e Descrição
+**Sistemas que entendem sistemas.** Um MVP de engenharia de dados para catalogar fontes tabulares, descobrir relações explicáveis, submeter propostas à governança humana e executar reconciliações auditáveis pelo n8n.
 
-O **SYNAPSE AI** é uma plataforma corporativa projetada para resolver a fragmentação e a falta de rastreabilidade na integração de bases de dados heterogêneas. Em vez de depender de scripts pontuais frágeis ou de automações cegas que realizam junções de tabelas sem validação, o SYNAPSE AI combina **descoberta heurística de relacionamentos**, **orquestração de fluxos via n8n** e um **mecanismo mandatório de governança humana (Human-in-the-Loop)**.
+Projeto desenvolvido para o **Hackathon UNAMA 2026**, por **João Paulo Gomes**.
 
-Nenhum pipeline é executado sem que um operador humano qualificado revise as evidências concretas, os fatores de similaridade e registre formalmente a aprovação da chave de relacionamento.
+> Estado do projeto: funcional em ambiente local e preparado para staging. A publicação em Railway/Vercel ainda depende da configuração dos serviços e segredos descrita em [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md).
 
----
+## O problema
 
-## 2. O Problema Resolvido
+Equipes recebem planilhas e bases isoladas sem conhecer, de antemão, quais colunas podem relacioná-las. A inspeção manual é lenta, difícil de reproduzir e frequentemente pula controles de aprovação. O SYNAPSE AI organiza esse fluxo: importa, cataloga, compara, explica, pede uma decisão humana e só então permite executar a integração.
 
-Nas organizações públicas e privadas, bases de dados de RH, folha de pagamento, suprimentos e ERPs legados frequentemente utilizam identificadores discrepantes para se referir à mesma entidade:
-* Base A (RH/Comercial): armazena o servidor sob a coluna `MATVINC`.
-* Base B (Folha de Pagamentos em Excel): registra o pagamento sob `matricula_funcional`.
+## Para quem
 
-Integrar essas bases manualmente gera:
-1. **Risco de Alucinação / Falso Positivo**: Algoritmos ingênuos tentam cruzar colunas por mera semelhança léxica (ex: `ANO_BASE` com `ANO_EXERCICIO`), gerando dados corrompidos.
-2. **Ausência de Auditoria e Conformidade**: Junções feitas em planilhas ou queries avulsas não deixam rastros de quem autorizou o relacionamento ou qual foi a taxa de divergência.
-3. **Falta de Conciliação em 3 Vias**: Dificuldade em identificar imediatamente quem está ativo sem receber pagamento e quem recebeu pagamento sem vínculo funcional cadastrado.
+- times de dados que precisam avaliar CSV/XLSX com rapidez;
+- áreas de governança que exigem aprovação e trilha de auditoria;
+- organizações que precisam demonstrar integrações sem usar dados pessoais ou institucionais reais.
 
-O SYNAPSE AI mitiga esses riscos isolando a descoberta, exigindo evidências matemáticas e bloqueando execuções não autorizadas.
+## O que já funciona
 
----
+- catálogo, visualização, arquivamento, restauração e exclusão controlada de fontes;
+- importação de CSV, TSV, XLS e XLSX com limite e extensões configuráveis;
+- persistência de metadados em SQLite local ou PostgreSQL por `DATABASE_URL`;
+- descoberta de chaves candidatas via webhook n8n, com score, fatores e evidências;
+- plano de análise com estados de governança e aprovação humana obrigatória;
+- Data Bridge para JOIN, correspondências e divergências verificáveis;
+- histórico de execuções e auditoria administrativa;
+- autenticação Bearer separada para operador e administração;
+- interface responsiva React/Vite, sem segredos embutidos no bundle;
+- health check que valida a API e a conexão com o banco.
 
-## 3. Público-Alvo e Cenários de Aplicação
-
-* **Auditorias Fiscais e Tribunais de Contas**: Cruzamento de folhas de pagamento contra cadastros de servidores para detecção de pagamentos indevidos ou "servidores fantasmas".
-* **Controladoria e Compliance**: Conciliação de pedidos de compra contra notas fiscais e relatórios bancários em formatos legados (CSV e Excel).
-* **Equipes de Engenharia de Dados e M&A**: Migração e unificação de sistemas legados durante fusões corporativas com documentação do racional de junção.
-
----
-
-## 4. Funcionalidades Comprovadamente Implementadas
-
-- [x] **Ingestão Universal e Parsing Estrito**: Upload com validação de formato para `.csv`, `.tsv`, `.xlsx` e `.xls`. Extração automática de metadados, contagem de registros, tipagem inferida (`integer`, `float`, `string`) e taxas de unicidade e valores nulos.
-- [x] **Intelligent Discovery Heurístico (Workflow n8n `LHJTja7RuShTAcJo`)**: Avaliação determinística baseada em:
-  - Similaridade semântica de nomes de campos via taxonomia;
-  - Compatibilidade e coerência de tipos primitivos;
-  - Sobreposição matemática de valores (`valoresEmComum` e índice Jaccard);
-  - Penalização por duplicatas e dispersão nula.
-  - Exibição de score heurístico (0 a 100%) e classificação de confiança (`CANDIDATO_RECOMENDADO`).
-- [x] **Governança Estrita & Human-in-the-Loop**:
-  - Bloqueio ativo de pipelines para planos pendentes ou rejeitados (HTTP 403 Forbidden).
-  - Imunidade contra adulteração: o executor busca as chaves aprovadas diretamente do banco relacional, ignorando payloads adulterados pelo cliente.
-  - Registro de justificativa formal e identificador do aprovador.
-- [x] **Data Bridge & Reconciliação em 3 Vias (Workflow n8n `WvgldAqi81hUMq58`)**:
-  - Identificação de **Registros Correspondentes** (ambas as bases coincidem).
-  - Identificação de **Divergências Base A** (ex: funcionário sem pagamento correspondente).
-  - Identificação de **Divergências Base B** (ex: pagamento lançado sem funcionário correspondente).
-- [x] **Trilha de Auditoria Imutável**: Histórico com UUID, carimbo de data/hora, status, ID do workflow n8n executado e quantitativos auditados.
-- [x] **Interface Moderna Stitch (Dark Mode)**: Sistema de design "Precision Orchestration" com tokens semânticos, paleta escura (#080D18 / #55fddf), acessibilidade e responsividade.
-- [x] **Suíte com 12 Testes Automatizados**: Testes de ponta a ponta e casos de borda validando todas as regras de negócio e de governança.
-
----
-
-## 5. Arquitetura e Stack Tecnológica
-
-O SYNAPSE AI adota uma arquitetura em camadas desacopladas:
-
-```
-┌────────────────────────────────────────────────────────┐
-│               Frontend (React 19 + Vite)              │
-│       Google Stitch UI • Tailwind CSS • Lucide Icons   │
-└───────────────────────────┬────────────────────────────┘
-                            │ REST / JSON (Porta 5173 -> 8000)
-┌───────────────────────────▼────────────────────────────┐
-│              Backend (FastAPI • Python 3.13)            │
-│  Validação Pydantic • SQLAlchemy 2.0 • SQLite Metadata │
-│    Políticas de Governança Estrita & Trava de JOIN     │
-└───────────────────────────┬────────────────────────────┘
-                            │ Webhook HTTP POST (Porta 8000 -> 5678)
-┌───────────────────────────▼────────────────────────────┐
-│              Orquestrador n8n (v2.43.8)                │
-│  - Intelligent Discovery Engine (LHJTja7RuShTAcJo)      │
-│  - Data Bridge POC Reconciliador (WvgldAqi81hUMq58)     │
-└────────────────────────────────────────────────────────┘
-```
-
-### Tecnologias:
-* **Frontend**: React 19, TypeScript 5.8+, Vite 8, Tailwind CSS 3.4, Lucide React, React Router v7.
-* **Backend**: FastAPI 0.115+, Uvicorn 0.30+, Pydantic v2, SQLAlchemy 2.0, HTTPX, OpenPyXL, Pandas, SQLite3.
-* **Orquestrador de Dados**: n8n v2.43.8 (Community Edition / Local), JavaScript Task Runner.
-
----
-
-## 6. Fluxo de Dados Completo
+## Fluxo principal
 
 ```mermaid
-sequenceDiagram
-    autonumber
-    actor Operador as Auditor / Usuário
-    participant UI as Frontend React
-    participant API as FastAPI Backend
-    participant DB as SQLite (Metadados)
-    participant N8N as n8n Workflows
-
-    Operador->>UI: Upload de funcionarios.csv e pagamentos.xlsx
-    UI->>API: POST /api/v1/sources/upload
-    API->>DB: Salva metadados e amostras
-    API-->>UI: Retorna fontes cadastradas
-    
-    Operador->>UI: Solicita análise de descoberta entre as bases
-    UI->>API: POST /api/v1/discovery/analyze
-    API->>N8N: Dispara webhook do Intelligent Discovery
-    N8N-->>API: Retorna Score (82%) e Evidências (1001, 1002 em comum)
-    API->>DB: Registra AnalysisPlan (status: PENDING_APPROVAL)
-    API-->>UI: Exibe proposta com evidências
-    
-    rect rgb(20, 30, 45)
-    Note over Operador, API: Barreira de Governança (Human-in-the-Loop)
-    Operador->>UI: Revisa fatores e clica em Aprovar
-    UI->>API: POST /api/v1/governance/decide (approved=true, justificativa)
-    API->>DB: Atualiza status do plano para APPROVED
-    end
-
-    Operador->>UI: Dispara execução do Pipeline
-    UI->>API: POST /api/v1/pipelines/execute (plan_id)
-    API->>DB: Valida se o plano está APPROVED
-    API->>N8N: Dispara webhook do Data Bridge com dados e chaves seladas
-    N8N-->>API: Retorna conciliação (Correspondentes, Divergentes A, Divergentes B)
-    API->>DB: Grava PipelineExecutionModel e histórico de auditoria
-    API-->>UI: Renderiza métricas e listagem reconciliada
+flowchart LR
+    U[CSV / XLSX] --> A[FastAPI]
+    A --> F[(Arquivos persistentes)]
+    A --> D[(SQLite local ou PostgreSQL)]
+    A --> N[n8n: descoberta]
+    N --> P[Plano explicável]
+    P --> G{Governança humana}
+    G -->|aprovar| B[n8n: Data Bridge]
+    G -->|rejeitar| X[Execução bloqueada]
+    B --> R[Correspondências e divergências]
+    R --> D
+    V[React / Vite] --> A
 ```
 
----
+A aplicação não treina nem hospeda um modelo generativo. A “descoberta inteligente” atual é um mecanismo heurístico determinístico e explicável, orquestrado pelo n8n. Detalhes: [visão técnica](./docs/TECHNICAL_OVERVIEW.md).
 
-## 7. Pré-requisitos de Instalação
+## Stack
 
-* **Node.js**: versão 20.x ou superior e `npm`.
-* **Python**: versão 3.11 ou superior (testado em Python 3.13).
-* **n8n**: instalado globalmente via `npm install -g n8n` ou executável via `npx n8n`.
-* **Git**: para clonagem e versionamento.
+| Camada | Tecnologia |
+|---|---|
+| Frontend | React 19, TypeScript, Vite 8, Tailwind CSS |
+| API | FastAPI, Pydantic, SQLAlchemy 2 |
+| Dados | SQLite no desenvolvimento; PostgreSQL preparado para staging |
+| Orquestração | n8n `2.43.8`, com workflows versionados |
+| Testes | pytest e Playwright |
+| Publicação planejada | Vercel + Railway |
 
----
+A identidade visual e seus tokens estão documentados em [DESIGN.md](./DESIGN.md) e `.stitch/`.
 
-## 8. Configuração de Ambiente
+## Capturas do produto
 
-1. Clone o repositório:
-```bash
-git clone <URL_DO_REPOSITORIO>
-cd synapse
+As imagens abaixo vêm da aplicação real em execução. Foram selecionados estados sem dados pessoais ou institucionais.
+
+### Descoberta explicável em tela móvel
+
+![Descoberta inteligente em viewport móvel](./docs/images/discovery-mobile.png)
+
+### Pipeline e Data Bridge
+
+![Pipeline Data Bridge em viewport móvel](./docs/images/pipeline-mobile.png)
+
+### Gestão de fontes
+
+![Estado filtrado da gestão de fontes](./docs/images/data-sources-empty.png)
+
+## Estrutura do repositório
+
+```text
+backend/                 API, modelos, serviços e testes pytest
+deploy/n8n/              imagem fixa, entrypoint e workflows do n8n
+demo_data/staging/       dois arquivos exclusivamente sintéticos
+docs/                    arquitetura, segurança, deploy e relatórios
+e2e/                     testes Playwright
+public/                  ativos estáticos
+src/                     aplicação React/TypeScript
+Dockerfile               imagem do FastAPI
+railway.toml             configuração Railway do backend
+vercel.json              configuração Vercel do frontend
 ```
 
-2. Instale as dependências do Frontend:
+## Execução local
+
+### Pré-requisitos
+
+- Node.js 20 ou superior e npm;
+- Python 3.12 ou superior;
+- uma instância n8n `2.43.8` para exercitar descoberta e Data Bridge.
+
+### 1. Frontend
+
 ```bash
 npm install
-```
-
-3. Configure o ambiente do Backend:
-```bash
-cd backend
-python -m pip install -r requirements.txt
-```
-
-4. Crie o arquivo de variáveis de ambiente a partir do modelo (sem expor segredos):
-```bash
-cp .env.example .env
-```
-*O arquivo `.env` gerado utiliza portas padrões locais (`PORT=8000`, `N8N_BASE_URL=http://localhost:5678`), compatíveis com execução em sandbox local sem necessidade de credenciais de nuvem.*
-
----
-
-## 9. Como Iniciar os Serviços
-
-Para rodar o SYNAPSE AI por completo, execute os 3 componentes em terminais separados:
-
-### Terminal 1 — Orquestrador n8n
-```bash
-npx n8n start
-```
-*Disponível em `http://localhost:5678`.*
-
-### Terminal 2 — Backend FastAPI
-```bash
-cd backend
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-```
-*Documentação Swagger disponível em `http://localhost:8000/docs`.*
-
-### Terminal 3 — Frontend React
-```bash
+cp .env.example .env.local
 npm run dev
 ```
-*Aplicação web acessível em `http://localhost:5173`.*
 
----
+No PowerShell, substitua o `cp` por `Copy-Item .env.example .env.local`.
 
-## 10. Como Executar os Testes Automatizados
-
-Com o Backend e o n8n iniciados, execute no diretório raiz:
+### 2. Backend
 
 ```bash
-# Suíte de Integração Completa (9 testes)
-python backend/tests/test_integrated_flow.py
-
-# Suíte de Governança Estrita e Casos de Borda (3 testes)
-python backend/tests/test_governance_edge_cases.py
+python -m venv backend/.venv
+source backend/.venv/bin/activate
+python -m pip install -r backend/requirements.txt
+cp backend/.env.example backend/.env
+uvicorn app.main:app --app-dir backend --host 0.0.0.0 --port 8000
 ```
 
-**Resultado esperado:**
-```text
-Ran 12 tests in ~35s
-OK
+No PowerShell, ative com `backend/.venv/Scripts/Activate.ps1` e use `Copy-Item backend/.env.example backend/.env`.
+
+### 3. n8n
+
+```bash
+npx n8n@2.43.8 start
 ```
 
----
+Importe e publique os dois arquivos de `deploy/n8n/workflows/` e mantenha os caminhos de webhook iguais aos valores de `backend/.env.example`. O backend espera o n8n em `http://localhost:5678` no desenvolvimento.
 
-## 11. Reprodução da Demonstração com Dados Sintéticos
+Abra `http://localhost:5173`. A API estará em `http://localhost:8000`, com documentação em `/docs` e health check em `/api/v1/health`.
 
-O projeto inclui um par de arquivos de teste para demonstração rápida em `backend/tests/fixtures/`:
-* `funcionarios.csv`: Base de 3 servidores cadastrados (`1001` - Ana, `1002` - Bruno, `1003` - Carla).
-* `pagamentos.xlsx`: Planilha de pagamentos (`1001` - R$ 2500, `1002` - R$ 3100, `1004` - R$ 2800).
+## Testes e verificações
 
-### Passo a passo no navegador:
-1. Abra `http://localhost:5173` no navegador.
-2. Na página **Data Sources**, verifique o banner de integração (*Backend Conectado* e *n8n Online*).
-3. Clique em **Importar Fonte** e faça o upload de `funcionarios.csv` e `pagamentos.xlsx`.
-4. Acesse a aba **Intelligent Discovery** e clique em **Nova Análise**.
-5. Observe o score calculado de **82%** recomendando a junção `MATVINC` ↔ `matricula_funcional` e verifique a lista de evidências apontando os valores comuns `1001` e `1002`.
-6. Tente disparar o pipeline diretamente (comprovando o bloqueio de segurança).
-7. Clique em **Aprovar Relação**, preenchendo a justificativa e o nome do auditor responsável.
-8. Prossiga para a aba **Pipelines** e clique em **Executar Data Bridge**.
-9. Visualize a reconciliação categorizada:
-   - **Correspondentes**: 2 registros conciliados com sucesso.
-   - **Sem Pagamento**: 1 servidora ativa sem folha lançada (Carla Dias - 1003).
-   - **Pagamentos sem Funcionário**: 1 pagamento lançado sem cadastro no RH (1004).
+```bash
+python -m pip install -r backend/requirements-dev.txt
+python -m pytest backend/tests -q
+npm run lint
+npm run build
+npm run test:e2e
+```
 
----
+Os testes de integração que acionam descoberta e Data Bridge exigem FastAPI e n8n locais ativos com os workflows publicados. Os resultados auditados por fase estão em [docs/PHASE6_READINESS.md](./docs/PHASE6_READINESS.md) e [docs/PHASE8A_READINESS.md](./docs/PHASE8A_READINESS.md).
 
-## 12. Limitações Conhecidas e Roadmap Futuro
+## Demonstração sintética
 
-* **Autenticação de Webhook**: No MVP de demonstração local, os webhooks do n8n comunicam-se via HTTP local. Em produção exposta na nuvem, deve ser habilitada autenticação mútua via cabeçalho HMAC / Bearer Token.
-* **Tamanho Máximo de Upload**: O limite atual está configurado em 10 MB por arquivo para garantir baixa latência na demonstração.
-* **Integração com LLMs Corporativas**: O motor de descoberta do MVP opera em modo heurístico determinístico (taxonomia + overlap exato + Jaccard). O roadmap prevê integração com modelos de linguagem (ex: Gemini via Vertex AI) para anotação semântica de esquemas complexos com milhares de tabelas.
-* **Exportação dos Resultados**: Exportação direta da lista de divergências auditadas para formatos PDF/A e Excel com assinatura digital.
+Use exclusivamente os arquivos de `demo_data/staging/`:
 
----
+1. importe `cadastro_colaboradores.csv` e `repasses_sinteticos.csv`;
+2. selecione as duas fontes na Descoberta Inteligente;
+3. confira a relação `id_colaborador` ↔ `codigo_pessoa`;
+4. aprove o plano como operador autorizado;
+5. execute o pipeline e valide 3 correspondências, 1 registro apenas na origem e 1 apenas no destino.
 
-## 13. Ferramentas de IA Utilizadas no Desenvolvimento
+Esses arquivos não derivam do SQLite nem dos uploads locais.
 
-Em conformidade com as diretrizes de transparência e integridade acadêmica do Hackathon:
-* **Google Stitch**: Utilizado para síntese e prototipagem inicial do Design System semanticamente documentado em `DESIGN.md`.
-* **Antigravity IDE & Gemini 3.8 Flash**: Utilizados como assistente de codificação, revisão de código, automação de testes com Playwright e elaboração de fixtures sintéticas.
-* **n8n Workflow Engine**: Nós de script e lógica em JavaScript para inferência determinística e reconciliação estruturada.
+## Segurança e governança
 
-*Todas as regras de negócio, modelagens de governança, esquemas Pydantic, endpoints FastAPI e suítes de testes foram concebidos e implementados de forma verificável e determinística pela equipe.*
+Staging e produção devem usar `AUTH_REQUIRED=true`. Tokens são configurados apenas no backend/secret manager e nunca em variáveis `VITE_*`. Exclusões permanentes e manutenção administrativa têm controles adicionais. Consulte [docs/SECURITY.md](./docs/SECURITY.md) antes de publicar.
 
----
+O repositório ignora `.env`, bancos locais, uploads, backups, logs, artefatos de teste e credenciais comuns. Mesmo assim, execute a auditoria do checklist antes de cada push.
 
-## 14. Licença
+## Documentação
 
-Este projeto é desenvolvido para fins de demonstração acadêmica e técnica no Hackathon UNAMA 2026.2.
-* Licença de Software: MIT License (ver arquivo `LICENSE` ou a critério do mantenedor).
-* Dados e Fixtures: Dados 100% sintéticos e de domínio público criados para a prova de conceito.
+- [Índice da documentação](./docs/README.md)
+- [Visão técnica, modelo de dados e algoritmos](./docs/TECHNICAL_OVERVIEW.md)
+- [Publicação Railway/Vercel, variáveis, backup e rollback](./docs/DEPLOYMENT.md)
+- [Matriz de segurança da API](./docs/SECURITY.md)
+- [Prontidão da Fase 8A](./docs/PHASE8A_READINESS.md)
+- [Guia de contribuição](./CONTRIBUTING.md)
+
+## Limitações conhecidas
+
+- staging e produção ainda não foram provisionados nem homologados;
+- a autenticação atual usa chaves Bearer compartilhadas, adequada ao MVP, mas não substitui identidade individual, rotação automatizada e RBAC;
+- arquivos dependem de volume persistente no Railway; sem o volume, metadados podem apontar para conteúdo ausente;
+- criação automática de esquema é suficiente para o MVP, mas evolução de produção deve adotar migrações versionadas;
+- observabilidade ainda é baseada em logs, health check e auditoria no banco;
+- a qualidade da descoberta depende da representatividade e normalização dos dados amostrados.
+
+## Próximos passos
+
+1. revisar a branch `deploy/staging-8a` como candidata à publicação;
+2. provisionar PostgreSQL, FastAPI e n8n no Railway com volumes e secrets;
+3. publicar o frontend na Vercel;
+4. carregar somente a base sintética e executar a homologação ponta a ponta;
+5. evoluir autenticação, migrações, monitoramento e testes de recuperação.
+
+## Ferramentas e autoria
+
+O produto foi concebido e implementado por **João Paulo Gomes**, com interface orientada pelo design system Stitch, automações n8n e assistência de ferramentas de desenvolvimento sob revisão humana. As regras de negócio, testes e decisões de governança permanecem versionados e auditáveis no repositório.
+
+## Licença
+
+Distribuído sob a licença MIT. Consulte [LICENSE](./LICENSE).

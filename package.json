@@ -7,6 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
+    "test:e2e": "playwright test",
+    "test:e2e:audit": "playwright test e2e/synapse.visual-audit.spec.ts",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -17,6 +19,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "@types/node": "^24.19.2",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",

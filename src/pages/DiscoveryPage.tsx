@@ -1,25 +1,59 @@
+﻿import { Icon } from '../components/common/Icon';
 import React, { useState } from 'react';
 import { useSynapse } from '../context/SynapseContext';
+import { evaluateCandidateFilter } from '../utils/discoveryFilters';
+
+const categoryLabel = (category?: string) =>
+  category === 'EXPLORATORIA' ? 'EXPLORATÓRIA' : (category ?? 'EXPLORATÓRIA');
 
 export const DiscoveryPage: React.FC = () => {
-  const { candidates, activeCandidate, setActiveCandidate, approveCandidate, rejectCandidate, dataSources, setIsUploadModalOpen } = useSynapse();
+  const {
+    candidates,
+    activeCandidate,
+    setActiveCandidate,
+    approveCandidate,
+    rejectCandidate,
+    dataSources,
+    setIsUploadModalOpen,
+    runDiscovery,
+    isDiscovering,
+    isGovernanceBusy,
+    backendOnline,
+    n8nReachable,
+    metrics,
+  } = useSynapse();
   const [minConfidence, setMinConfidence] = useState(70);
   const [onlyKeys, setOnlyKeys] = useState(true);
   const [rejectionModalOpen, setRejectionModalOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
+  const [sourceAId, setSourceAId] = useState('');
+  const [sourceBId, setSourceBId] = useState('');
 
   const currentCandidate = activeCandidate || candidates[0];
+  const governedCandidateId = candidates[0]?.id;
+  const isGovernableCandidate = currentCandidate?.id === governedCandidateId && currentCandidate?.classificacao !== 'REJEITADO';
+  const formatFactor = (value: number | null) => value == null ? '—' : `${(value * 100).toFixed(0)}%`;
+  const sourceLabel = (source: typeof dataSources[number]) =>
+    `${source.name} · ${source.sourceType.toUpperCase()} · ${source.rowCount} linhas · ${source.id.slice(0, 8)}`;
 
-  const filteredCandidates = candidates.filter(c => {
-    if (c.score < minConfidence) return false;
-    if (onlyKeys && c.classificacao === 'REJEITADO') return false;
-    return true;
-  });
+  const evaluatedCandidates = candidates.map(candidate => evaluateCandidateFilter(candidate, minConfidence, onlyKeys));
+  const filteredCandidates = evaluatedCandidates.filter(item => item.visible).map(item => item.candidate);
+  const filteredOutCandidates = evaluatedCandidates.filter(item => !item.visible);
+  const currentEvaluation = evaluatedCandidates.find(item => item.candidate.id === currentCandidate?.id);
+  const categoryCounts = evaluatedCandidates.reduce<Record<string, number>>((counts, item) => {
+    counts[item.category] = (counts[item.category] ?? 0) + 1;
+    return counts;
+  }, {});
 
   const handleApprove = () => {
     if (currentCandidate) {
       approveCandidate(currentCandidate.id);
     }
+  };
+
+  const handleDiscovery = async () => {
+    if (!sourceAId || !sourceBId) return;
+    await runDiscovery(sourceAId, sourceBId);
   };
 
   const handleConfirmReject = () => {
@@ -63,7 +97,7 @@ export const DiscoveryPage: React.FC = () => {
           <div className="flex items-center gap-4 bg-surface-container-lowest/80 border border-outline-variant/60 px-space-md py-space-sm rounded">
             <div className="text-right">
               <div className="text-[10px] font-code-compact text-on-surface-variant">Taxa de Auto-Match</div>
-              <div className="text-lg font-bold text-primary font-code-compact">96.8%</div>
+              <div className="text-lg font-bold text-primary font-code-compact">{metrics.taxaAutoMatch.toFixed(1)}%</div>
             </div>
             <div className="h-6 w-px bg-outline-variant"></div>
             <div>
@@ -82,12 +116,12 @@ export const DiscoveryPage: React.FC = () => {
             </span>
             <span className="text-on-surface font-medium">Varredura Contínua:</span>
             <span className="text-on-surface-variant">
-              {dataSources.length} fontes analisadas, 12 esquemas, 38 campos correlacionados em 4.2s
+              {dataSources.length} fontes disponíveis no catálogo real
             </span>
           </div>
           <div className="flex items-center gap-2">
             <span className="px-2 py-0.5 rounded bg-surface-container-high text-primary border border-outline-variant text-[11px]">
-              Status: Pronto para Decisão
+              Status: {isDiscovering ? 'Analisando' : currentCandidate ? 'Pronto para Decisão' : 'Aguardando seleção'}
             </span>
             <span className="text-outline-variant">|</span>
             <span className="text-on-surface-variant">n8n Workflow ID: LHJTja7RuShTAcJo</span>
@@ -96,26 +130,42 @@ export const DiscoveryPage: React.FC = () => {
       </section>
 
       {/* 2. Seleção de Fontes e Filtros de Confiança */}
-      <section className="bg-surface-container border border-outline-variant p-space-md rounded-lg flex flex-wrap items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-space-md">
+      <section className="flex flex-col gap-4 rounded-lg border border-outline-variant bg-surface-container p-space-md xl:flex-row xl:items-end xl:justify-between">
+        <div className="grid w-full gap-space-md sm:grid-cols-2 xl:flex xl:w-auto xl:flex-wrap xl:items-end">
           {/* Fonte Origem */}
-          <div className="flex flex-col gap-1">
+          <div className="flex min-w-0 flex-col gap-1">
             <label className="text-[10px] font-code-compact text-on-surface-variant uppercase tracking-wider">Fonte Origem</label>
-            <div className="flex items-center gap-2 px-space-sm py-1 bg-surface-container-lowest border border-outline-variant rounded h-8 text-xs font-code-compact">
-              <span className="material-symbols-outlined text-[15px] text-secondary">database</span>
-              <span className="text-on-surface font-medium">{currentCandidate?.sourceDataSourceName || 'PostgreSQL'}</span>
-            </div>
+            <select
+              value={sourceAId}
+              onChange={(event) => setSourceAId(event.target.value)}
+              className="h-8 w-full min-w-0 rounded border border-outline-variant bg-surface-container-lowest px-space-sm text-xs font-code-compact text-on-surface focus:border-primary focus:outline-none xl:w-56"
+            >
+              <option value="">Selecione a origem</option>
+              {dataSources.map(source => (
+                <option key={source.id} value={source.id} disabled={source.id === sourceBId}>
+                  {sourceLabel(source)}
+                </option>
+              ))}
+            </select>
           </div>
 
-          <span className="material-symbols-outlined text-outline-variant self-end pb-1.5 hidden md:block">swap_horiz</span>
+          <Icon name="swap_horiz" className="text-outline-variant self-end pb-1.5 hidden md:block" />
 
           {/* Fonte Destino */}
-          <div className="flex flex-col gap-1">
+          <div className="flex min-w-0 flex-col gap-1">
             <label className="text-[10px] font-code-compact text-on-surface-variant uppercase tracking-wider">Fonte Destino</label>
-            <div className="flex items-center gap-2 px-space-sm py-1 bg-surface-container-lowest border border-outline-variant rounded h-8 text-xs font-code-compact">
-              <span className="material-symbols-outlined text-[15px] text-primary">table_chart</span>
-              <span className="text-on-surface font-medium">{currentCandidate?.targetDataSourceName || 'Excel'}</span>
-            </div>
+            <select
+              value={sourceBId}
+              onChange={(event) => setSourceBId(event.target.value)}
+              className="h-8 w-full min-w-0 rounded border border-outline-variant bg-surface-container-lowest px-space-sm text-xs font-code-compact text-on-surface focus:border-primary focus:outline-none xl:w-56"
+            >
+              <option value="">Selecione o destino</option>
+              {dataSources.map(source => (
+                <option key={source.id} value={source.id} disabled={source.id === sourceAId}>
+                  {sourceLabel(source)}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="h-8 w-px bg-outline-variant hidden lg:block self-end pb-2"></div>
@@ -128,15 +178,24 @@ export const DiscoveryPage: React.FC = () => {
               onChange={(e) => setMinConfidence(Number(e.target.value))}
               className="h-8 px-space-sm bg-surface-container-lowest border border-outline-variant rounded text-xs font-code-compact text-primary focus:outline-none focus:border-primary"
             >
-              <option value={85}>&gt; 85% Alta Confiança</option>
-              <option value={70}>&gt; 70% Recomendado</option>
-              <option value={40}>&gt; 40% Todos os Candidatos</option>
+              <option value={85}>≥ 85% Alta confiança</option>
+              <option value={70}>≥ 70% Recomendadas</option>
+              <option value={40}>≥ 40% Candidatas e recomendadas</option>
+              <option value={0}>Todas, incluindo exploratórias</option>
             </select>
           </div>
         </div>
 
         {/* Controls: Toggles & Upload button */}
-        <div className="flex items-center gap-4">
+        <div className="flex w-full flex-wrap items-center gap-3 xl:w-auto xl:justify-end">
+          <button
+            onClick={handleDiscovery}
+            disabled={!backendOnline || !n8nReachable || !sourceAId || !sourceBId || sourceAId === sourceBId || isDiscovering}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-on-primary text-xs font-semibold rounded hover:shadow-teal-glow transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Icon name={isDiscovering ? 'progress_activity' : 'manage_search'} className={`w-[15px] h-[15px] ${isDiscovering ? 'animate-spin' : ''}`} />
+            <span>{isDiscovering ? 'Executando descoberta...' : 'Descobrir relações'}</span>
+          </button>
           <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-code-compact">
             <input 
               type="checkbox" 
@@ -151,19 +210,28 @@ export const DiscoveryPage: React.FC = () => {
             onClick={() => setIsUploadModalOpen(true)}
             className="flex items-center gap-1.5 px-3 py-1 bg-surface-container-high hover:bg-surface-container-highest border border-outline-variant text-primary text-xs rounded transition-colors"
           >
-            <span className="material-symbols-outlined text-[15px]">upload_file</span>
+            <Icon name="upload_file" className="text-[15px]" />
             <span>Testar Novo Arquivo</span>
           </button>
         </div>
       </section>
 
       {/* 3. Card Principal de Relação Descoberta com Explicabilidade Profunda */}
+      {!currentCandidate && (
+        <section className="bg-surface-container-low border border-outline-variant rounded-lg p-8 text-center">
+          <Icon name="manage_search" className="text-[32px] text-outline" />
+          <h2 className="mt-2 text-sm font-semibold text-on-surface">Nenhuma proposta real carregada</h2>
+          <p className="mt-1 text-xs text-on-surface-variant">
+            Selecione duas fontes distintas e execute a descoberta para consultar o workflow n8n.
+          </p>
+        </section>
+      )}
       {currentCandidate && (
         <article className="bg-surface-container-low border border-outline-variant rounded-lg overflow-hidden shadow-card-subtle transition-all">
           {/* Header do Card */}
           <div className="px-space-lg py-space-md bg-surface-container border-b border-outline-variant flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-space-sm">
-              <span className="material-symbols-outlined text-primary text-[22px]">join_inner</span>
+              <Icon name="join_inner" className="text-primary text-[22px]" />
               <div>
                 <div className="text-sm font-semibold text-on-surface flex items-center gap-2">
                   <span>Relação Sugerida:</span>
@@ -189,9 +257,17 @@ export const DiscoveryPage: React.FC = () => {
                 </div>
               </div>
               <div className="w-7 h-7 rounded-full border-2 border-primary border-t-transparent animate-spin flex items-center justify-center">
-                <span className="material-symbols-outlined text-primary text-[14px]">bolt</span>
+                <Icon name="bolt" className="text-primary text-[14px]" />
               </div>
             </div>
+          </div>
+
+          <div className={`border-b px-space-lg py-2 text-xs font-code-compact ${currentEvaluation?.visible ? 'border-outline-variant bg-surface-container-lowest text-on-surface-variant' : 'border-amber-500/30 bg-amber-500/10 text-amber-300'}`}>
+            <span className="font-semibold">{categoryLabel(currentEvaluation?.category)}</span>
+            {currentEvaluation && !currentEvaluation.visible
+              ? ` · Fora dos filtros atuais: ${currentEvaluation.reasons.join('; ')}.`
+              : ' · Esta relação atende aos filtros atuais.'}
+            {currentCandidate.motivoMotor && <span className="block mt-1">Avaliação do motor: {currentCandidate.motivoMotor}</span>}
           </div>
 
           <div className="p-space-lg space-y-space-lg">
@@ -201,7 +277,7 @@ export const DiscoveryPage: React.FC = () => {
               <div className="md:col-span-5 bg-surface-container border border-outline-variant rounded p-space-md space-y-3">
                 <div className="flex items-center justify-between border-b border-outline-variant/60 pb-2">
                   <div className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-secondary text-[16px]">database</span>
+                    <Icon name="database" className="text-secondary text-[16px]" />
                     <span className="text-xs font-code-compact font-semibold text-secondary">
                       [{currentCandidate.sourceDataSourceName.split(' ')[0]}]
                     </span>
@@ -212,34 +288,24 @@ export const DiscoveryPage: React.FC = () => {
                   </span>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 text-xs font-code-compact">
-                  <div className="bg-surface-container-lowest p-2 rounded border border-outline-variant/40">
-                    <span className="text-on-surface-variant block text-[10px]">Não-nulos:</span>
-                    <span className="text-on-surface font-semibold">100.0%</span>
-                  </div>
-                  <div className="bg-surface-container-lowest p-2 rounded border border-outline-variant/40">
-                    <span className="text-on-surface-variant block text-[10px]">Unicidade:</span>
-                    <span className="text-primary font-semibold">100.0% (Chave)</span>
-                  </div>
-                </div>
-
                 <div>
                   <span className="text-[10px] font-code-compact text-on-surface-variant block mb-1 uppercase tracking-wider">
-                    Amostra no Domínio:
+                    Evidências retornadas pelo workflow:
                   </span>
                   <div className="bg-surface-container-lowest p-2 rounded border border-outline-variant space-y-1 font-code-compact text-xs">
-                    <div className="flex justify-between text-on-surface">
-                      <span>"1001"</span>
-                      <span className="text-primary text-[10px]">match ✓</span>
-                    </div>
-                    <div className="flex justify-between text-on-surface">
-                      <span>"1002"</span>
-                      <span className="text-primary text-[10px]">match ✓</span>
-                    </div>
-                    <div className="flex justify-between text-amber-400">
-                      <span>"1003" (Carla)</span>
-                      <span className="text-outline text-[10px]">apenas em A</span>
-                    </div>
+                    {currentCandidate.evidencias.valoresEmComum.map(value => (
+                      <div key={`a-common-${value}`} className="flex justify-between text-on-surface">
+                        <span>{value}</span><span className="text-primary text-[10px]">em comum</span>
+                      </div>
+                    ))}
+                    {currentCandidate.evidencias.amostraValoresApenasEmA.map(value => (
+                      <div key={`a-only-${value}`} className="flex justify-between text-amber-400">
+                        <span>{value}</span><span className="text-outline text-[10px]">apenas em A</span>
+                      </div>
+                    ))}
+                    {currentCandidate.evidencias.valoresEmComum.length === 0 && currentCandidate.evidencias.amostraValoresApenasEmA.length === 0 && (
+                      <span className="text-on-surface-variant">Nenhuma amostra fornecida.</span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -247,10 +313,10 @@ export const DiscoveryPage: React.FC = () => {
               {/* Indicador Central com Regra de Normalização */}
               <div className="md:col-span-1 flex flex-col items-center justify-center gap-2">
                 <div className="p-2 rounded-full bg-surface-container-high border border-primary text-primary flex items-center justify-center shadow-teal-glow">
-                  <span className="material-symbols-outlined text-[18px]">sync_alt</span>
+                  <Icon name="sync_alt" className="text-[18px]" />
                 </div>
                 <span className="text-[9px] font-code-compact text-center text-on-surface-variant">
-                  Match 1:1
+                  Relação candidata
                 </span>
               </div>
 
@@ -258,7 +324,7 @@ export const DiscoveryPage: React.FC = () => {
               <div className="md:col-span-5 bg-surface-container border border-outline-variant rounded p-space-md space-y-3">
                 <div className="flex items-center justify-between border-b border-outline-variant/60 pb-2">
                   <div className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-primary text-[16px]">table_chart</span>
+                    <Icon name="table_chart" className="text-primary text-[16px]" />
                     <span className="text-xs font-code-compact font-semibold text-primary">
                       [{currentCandidate.targetDataSourceName.split(' ')[0]}]
                     </span>
@@ -269,71 +335,67 @@ export const DiscoveryPage: React.FC = () => {
                   </span>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 text-xs font-code-compact">
-                  <div className="bg-surface-container-lowest p-2 rounded border border-outline-variant/40">
-                    <span className="text-on-surface-variant block text-[10px]">Não-nulos:</span>
-                    <span className="text-on-surface font-semibold">100.0%</span>
-                  </div>
-                  <div className="bg-surface-container-lowest p-2 rounded border border-outline-variant/40">
-                    <span className="text-on-surface-variant block text-[10px]">Unicidade:</span>
-                    <span className="text-secondary font-semibold">99.8% (Quase Chave)</span>
-                  </div>
-                </div>
-
                 <div>
                   <span className="text-[10px] font-code-compact text-on-surface-variant block mb-1 uppercase tracking-wider">
-                    Amostra no Domínio:
+                    Evidências retornadas pelo workflow:
                   </span>
                   <div className="bg-surface-container-lowest p-2 rounded border border-outline-variant space-y-1 font-code-compact text-xs">
-                    <div className="flex justify-between text-on-surface">
-                      <span>"1001"</span>
-                      <span className="text-primary text-[10px]">match ✓</span>
-                    </div>
-                    <div className="flex justify-between text-on-surface">
-                      <span>"1002"</span>
-                      <span className="text-primary text-[10px]">match ✓</span>
-                    </div>
-                    <div className="flex justify-between text-purple-400">
-                      <span>"1004" (Pagamento Avulso)</span>
-                      <span className="text-outline text-[10px]">apenas em B</span>
-                    </div>
+                    {currentCandidate.evidencias.valoresEmComum.map(value => (
+                      <div key={`b-common-${value}`} className="flex justify-between text-on-surface">
+                        <span>{value}</span><span className="text-primary text-[10px]">em comum</span>
+                      </div>
+                    ))}
+                    {currentCandidate.evidencias.amostraValoresApenasEmB.map(value => (
+                      <div key={`b-only-${value}`} className="flex justify-between text-purple-400">
+                        <span>{value}</span><span className="text-outline text-[10px]">apenas em B</span>
+                      </div>
+                    ))}
+                    {currentCandidate.evidencias.valoresEmComum.length === 0 && currentCandidate.evidencias.amostraValoresApenasEmB.length === 0 && (
+                      <span className="text-on-surface-variant">Nenhuma amostra fornecida.</span>
+                    )}
                   </div>
                 </div>
+              </div>
+              <div className={`md:col-span-11 mt-3 rounded border p-3 text-xs ${currentCandidate.evidencias.riscoMuitosParaMuitos ? 'border-error/50 bg-error/10 text-red-300' : 'border-outline-variant bg-surface-container-lowest text-on-surface-variant'}`}>
+                <strong>Risco de cardinalidade:</strong>{' '}
+                {currentCandidate.evidencias.riscoMuitosParaMuitos
+                  ? 'muitos-para-muitos detectado; um JOIN pode multiplicar registros e exige validação antes da aprovação.'
+                  : `sem risco muitos-para-muitos sinalizado. Unicidade A ${formatFactor(currentCandidate.evidencias.unicidadeA)} · Unicidade B ${formatFactor(currentCandidate.evidencias.unicidadeB)}.`}
               </div>
             </div>
 
             {/* Painel de Explicabilidade Heurística (5 Fatores) */}
             <div className="bg-surface-container p-space-md rounded border border-outline-variant space-y-2">
               <span className="text-xs font-semibold text-on-surface flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary text-[16px]">analytics</span>
+                <Icon name="analytics" className="text-primary text-[16px]" />
                 <span>Fatores Explicáveis da Decisão Algorítmica</span>
               </span>
 
               <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-2 text-xs font-code-compact">
                 <div className="bg-surface-container-lowest p-2.5 rounded border border-outline-variant/50">
                   <span className="text-on-surface-variant block text-[10px]">Semântica de Nomes:</span>
-                  <span className="text-secondary font-bold text-sm">{(currentCandidate.fatores.similaridadeSemanticaNome * 100).toFixed(0)}%</span>
-                  <span className="text-[10px] text-outline block mt-0.5">Raiz "mat/func"</span>
+                  <span className="text-secondary font-bold text-sm">{formatFactor(currentCandidate.fatores.similaridadeSemanticaNome)}</span>
+                  <span className="text-[10px] text-outline block mt-0.5">Retornado pelo n8n</span>
                 </div>
                 <div className="bg-surface-container-lowest p-2.5 rounded border border-outline-variant/50">
                   <span className="text-on-surface-variant block text-[10px]">Tipagem & Formato:</span>
-                  <span className="text-primary font-bold text-sm">{(currentCandidate.fatores.compatibilidadeTipo * 100).toFixed(0)}%</span>
-                  <span className="text-[10px] text-outline block mt-0.5">Ambos Integer</span>
+                  <span className="text-primary font-bold text-sm">{formatFactor(currentCandidate.fatores.compatibilidadeTipo)}</span>
+                  <span className="text-[10px] text-outline block mt-0.5">Retornado pelo n8n</span>
                 </div>
                 <div className="bg-surface-container-lowest p-2.5 rounded border border-outline-variant/50">
                   <span className="text-on-surface-variant block text-[10px]">Sobreposição Mínima:</span>
-                  <span className="text-primary font-bold text-sm">{(currentCandidate.fatores.sobreposicaoValoresMin * 100).toFixed(0)}%</span>
+                  <span className="text-primary font-bold text-sm">{formatFactor(currentCandidate.fatores.sobreposicaoValoresMin)}</span>
                   <span className="text-[10px] text-outline block mt-0.5">Intersecção de Valores</span>
                 </div>
                 <div className="bg-surface-container-lowest p-2.5 rounded border border-outline-variant/50">
                   <span className="text-on-surface-variant block text-[10px]">Jaccard de Valores:</span>
-                  <span className="text-on-surface font-bold text-sm">{(currentCandidate.fatores.jaccardValores * 100).toFixed(0)}%</span>
+                  <span className="text-on-surface font-bold text-sm">{formatFactor(currentCandidate.fatores.jaccardValores)}</span>
                   <span className="text-[10px] text-outline block mt-0.5">Similaridade Global</span>
                 </div>
                 <div className="bg-surface-container-lowest p-2.5 rounded border border-outline-variant/50">
                   <span className="text-on-surface-variant block text-[10px]">Consistência 1:1:</span>
-                  <span className="text-emerald-400 font-bold text-sm">{(currentCandidate.fatores.consistenciaUnicidade * 100).toFixed(0)}%</span>
-                  <span className="text-[10px] text-outline block mt-0.5">Sem duplicatas</span>
+                  <span className="text-emerald-400 font-bold text-sm">{formatFactor(currentCandidate.fatores.consistenciaUnicidade)}</span>
+                  <span className="text-[10px] text-outline block mt-0.5">Retornado pelo n8n</span>
                 </div>
               </div>
             </div>
@@ -343,7 +405,7 @@ export const DiscoveryPage: React.FC = () => {
               <div className="bg-surface-container p-space-md rounded border border-primary/40 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-primary flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-[16px]">task_alt</span>
+                    <Icon name="task_alt" className="text-[16px]" />
                     <span>Resultado do JOIN Executado (Preview Determinístico)</span>
                   </span>
                   <span className="text-[10px] font-code-compact px-2 py-0.5 rounded bg-primary/20 text-primary font-bold">
@@ -395,7 +457,7 @@ export const DiscoveryPage: React.FC = () => {
               <div className="flex items-center gap-2">
                 <span className="text-xs text-on-surface-variant font-code-compact">Decisão Humana Obrigatória:</span>
                 <span className={`px-2 py-0.5 rounded text-[11px] font-code-compact font-semibold ${
-                  currentCandidate.status === 'PLANO_APROVADO_EXECUTADO'
+                  currentCandidate.status === 'PLANO_APROVADO_EXECUTADO' || currentCandidate.status === 'PLANO_APROVADO'
                     ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
                     : currentCandidate.status === 'REJEITADO_PELO_USUARIO'
                     ? 'bg-red-500/20 text-red-400 border border-red-500/40'
@@ -403,6 +465,11 @@ export const DiscoveryPage: React.FC = () => {
                 }`}>
                   {currentCandidate.status}
                 </span>
+                {!isGovernableCandidate && (
+                  <span className="text-[10px] text-amber-400 font-code-compact">
+                    Somente a proposta principal deste plano pode receber decisão de governança.
+                  </span>
+                )}
               </div>
 
               <div className="flex items-center gap-2">
@@ -410,27 +477,29 @@ export const DiscoveryPage: React.FC = () => {
                   onClick={handleExportJson}
                   className="px-3 py-1.5 rounded bg-surface-container hover:bg-surface-container-high border border-outline-variant text-xs text-on-surface transition-colors flex items-center gap-1.5"
                 >
-                  <span className="material-symbols-outlined text-[15px]">download</span>
+                  <Icon name="download" className="text-[15px]" />
                   <span>Exportar (.json)</span>
                 </button>
 
                 {currentCandidate.status !== 'REJEITADO_PELO_USUARIO' && (
                   <button
                     onClick={() => setRejectionModalOpen(true)}
+                    disabled={isGovernanceBusy || !isGovernableCandidate || currentCandidate.status !== 'PROPOSTO_AGUARDANDO_APROVACAO'}
                     className="px-3 py-1.5 rounded bg-surface-container hover:bg-red-500/20 border border-outline-variant hover:border-red-500/50 text-xs text-red-400 transition-colors flex items-center gap-1.5"
                   >
-                    <span className="material-symbols-outlined text-[15px]">close</span>
+                    <Icon name="close" className="text-[15px]" />
                     <span>Rejeitar Relação</span>
                   </button>
                 )}
 
-                {currentCandidate.status !== 'PLANO_APROVADO_EXECUTADO' && (
+                {currentCandidate.status === 'PROPOSTO_AGUARDANDO_APROVACAO' && (
                   <button
                     onClick={handleApprove}
-                    className="px-4 py-1.5 rounded bg-primary text-on-primary text-xs font-semibold hover:shadow-teal-glow transition-all flex items-center gap-1.5"
+                    disabled={isGovernanceBusy || !isGovernableCandidate}
+                    className="px-4 py-1.5 rounded bg-primary text-on-primary text-xs font-semibold hover:shadow-teal-glow transition-all flex items-center gap-1.5 disabled:opacity-50"
                   >
-                    <span className="material-symbols-outlined text-[16px]">check_circle</span>
-                    <span>Aprovar Relação & Executar JOIN</span>
+                    <Icon name="check_circle" className="text-[16px]" />
+                    <span>{isGovernanceBusy ? 'Registrando decisão...' : 'Aprovar Relação'}</span>
                   </button>
                 )}
               </div>
@@ -441,14 +510,18 @@ export const DiscoveryPage: React.FC = () => {
 
       {/* 4. Lista Secundária de Candidatos a Relacionamento */}
       <section className="space-y-space-sm">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-xs font-semibold font-code-compact text-on-surface uppercase tracking-wider">
-            Demais Candidatos Identificados ({filteredCandidates.length})
+            Relações analisadas ({candidates.length}) · Exibidas ({filteredCandidates.length}) · Filtradas ({filteredOutCandidates.length})
           </h2>
           <span className="text-[11px] font-code-compact text-on-surface-variant">
-            Clique em um candidato para carregar a matriz explicativa completa
+            {categoryCounts.RECOMENDADA ?? 0} recomendada(s) · {categoryCounts.CANDIDATA ?? 0} candidata(s) · {categoryCounts.EXPLORATORIA ?? 0} exploratória(s)
           </span>
         </div>
+
+        {filteredOutCandidates.length > 0 && <div className="rounded border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] font-code-compact text-amber-200"><strong>{filteredOutCandidates.length} relação(ões) fora da lista.</strong> Motivos: {[...new Set(filteredOutCandidates.flatMap(item => item.reasons))].join('; ')}. Reduza a confiança mínima ou desmarque “Apenas Chaves Candidatas” para inspecioná-las.</div>}
+
+        {candidates.length > 0 && filteredCandidates.length === 0 && <div className="rounded-lg border border-outline-variant bg-surface-container-low p-6 text-center"><Icon name="filter_alt_off" className="mx-auto h-7 w-7 text-amber-400" /><h3 className="mt-2 text-sm font-semibold text-on-surface">Nenhuma relação atende aos filtros atuais</h3><p className="mt-1 text-xs text-on-surface-variant">A análise encontrou {candidates.length} relação(ões), preservadas para inspeção. Nenhum score foi alterado ou descartado pelo backend.</p></div>}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-space-md">
           {filteredCandidates.map(cand => (
@@ -477,13 +550,22 @@ export const DiscoveryPage: React.FC = () => {
               <p className="text-xs text-on-surface-variant line-clamp-2 mb-3">
                 {cand.explicacao}
               </p>
+              {cand.motivoMotor && <p className="mb-3 text-[11px] font-code-compact text-amber-300">Motor: {cand.motivoMotor}</p>}
 
               <div className="flex items-center justify-between text-[11px] font-code-compact text-on-surface-variant border-t border-outline-variant/50 pt-2">
-                <span>{cand.sourceDataSourceName.split(' ')[0]} ↔ {cand.targetDataSourceName.split(' ')[0]}</span>
+                <span>{categoryLabel(evaluatedCandidates.find(item => item.candidate.id === cand.id)?.category)} · {cand.sourceDataSourceName.split(' ')[0]} ↔ {cand.targetDataSourceName.split(' ')[0]}</span>
                 <span className={`font-semibold ${
-                  cand.status === 'PLANO_APROVADO_EXECUTADO' ? 'text-emerald-400' : 'text-amber-400'
+                  cand.status === 'PLANO_APROVADO_EXECUTADO' || cand.status === 'PLANO_APROVADO' ? 'text-emerald-400' : 'text-amber-400'
                 }`}>
-                  {cand.status === 'PLANO_APROVADO_EXECUTADO' ? 'Aprovado ✓' : 'Aguardando Aprovação'}
+                  {cand.id !== governedCandidateId
+                    ? 'Alternativa para análise'
+                    : cand.status === 'PLANO_APROVADO_EXECUTADO'
+                    ? 'Executado ✓'
+                    : cand.status === 'PLANO_APROVADO'
+                    ? 'Aprovado ✓'
+                    : cand.status === 'REJEITADO_PELO_USUARIO'
+                    ? 'Rejeitado'
+                    : 'Aguardando Aprovação'}
                 </span>
               </div>
             </div>
@@ -496,7 +578,7 @@ export const DiscoveryPage: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
           <div className="bg-surface-container-low border border-outline-variant rounded-lg max-w-md w-full p-space-md space-y-4">
             <div className="flex items-center gap-2 text-red-400">
-              <span className="material-symbols-outlined">warning</span>
+              <Icon name="warning" className="" />
               <h3 className="text-sm font-semibold text-on-surface">Rejeitar Relação Candidata</h3>
             </div>
             <p className="text-xs text-on-surface-variant">

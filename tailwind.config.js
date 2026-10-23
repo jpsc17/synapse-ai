@@ -55,14 +55,14 @@ export default {
         "warning": "#F59E0B"
       },
       fontFamily: {
-        sans: ["Geist", "sans-serif"],
-        "body-default": ["Geist", "sans-serif"],
-        "headline-sm": ["Geist", "sans-serif"],
-        "headline-md": ["Geist", "sans-serif"],
-        "display-lg": ["Geist", "sans-serif"],
-        "code-compact": ["JetBrains Mono", "monospace"],
-        "code-base": ["JetBrains Mono", "monospace"],
-        mono: ["JetBrains Mono", "monospace"]
+        sans: ["Inter", "ui-sans-serif", "Segoe UI", "sans-serif"],
+        "body-default": ["Inter", "ui-sans-serif", "Segoe UI", "sans-serif"],
+        "headline-sm": ["Inter", "ui-sans-serif", "Segoe UI", "sans-serif"],
+        "headline-md": ["Inter", "ui-sans-serif", "Segoe UI", "sans-serif"],
+        "display-lg": ["Inter", "ui-sans-serif", "Segoe UI", "sans-serif"],
+        "code-compact": ["Cascadia Mono", "Consolas", "monospace"],
+        "code-base": ["Cascadia Mono", "Consolas", "monospace"],
+        mono: ["Cascadia Mono", "Consolas", "monospace"]
       },
       spacing: {
         "gutter": "1rem",

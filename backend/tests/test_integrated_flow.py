@@ -3,6 +3,8 @@ import sys
 import unittest
 from pathlib import Path
 import httpx
+from app.database import SessionLocal
+from app.models import AnalysisPlanModel, DataSourceModel
 
 BASE_URL = "http://localhost:8000/api/v1"
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
@@ -13,6 +15,28 @@ class TestSynapseIntegratedFlow(unittest.TestCase):
 
     def tearDown(self):
         self.client.close()
+
+    @classmethod
+    def tearDownClass(cls):
+        """Remove somente os registros criados por esta classe de integração."""
+        with SessionLocal() as db:
+            plan_id = getattr(cls, "plan_id", None)
+            if plan_id:
+                plan = db.query(AnalysisPlanModel).filter(AnalysisPlanModel.id == plan_id).first()
+                if plan:
+                    db.delete(plan)
+            for attribute in ("ds_a_id", "ds_b_id"):
+                source_id = getattr(cls, attribute, None)
+                if not source_id:
+                    continue
+                source = db.query(DataSourceModel).filter(DataSourceModel.id == source_id).first()
+                if source:
+                    file_path = Path(source.file_path) if source.file_path else None
+                    db.delete(source)
+                    db.flush()
+                    if file_path and file_path.exists():
+                        file_path.unlink()
+            db.commit()
 
     def test_01_health_check(self):
         """Verifica se o backend e a integração com n8n estão saudáveis."""

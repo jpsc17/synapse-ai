@@ -34,6 +34,13 @@ class GovernanceService:
         if plan.status == "EXECUTED":
             raise GovernanceViolationError("Este plano já foi executado no pipeline e não pode ter sua decisão alterada.")
 
+        suggested = plan.suggested_relation or {}
+        if approved and suggested.get("classificacao") == "REJEITADO":
+            raise GovernanceViolationError(
+                "Aprovação bloqueada: a relação principal foi classificada como exploratória/rejeitada pelo motor. "
+                "Revise outras correspondências ou execute uma nova descoberta com fontes adequadas."
+            )
+
         # Cria o registro de decisão de governança
         decision = GovernanceDecisionModel(
             plan_id=plan.id,
@@ -103,38 +110,44 @@ class GovernanceService:
 
         # Mapeamento do plano selado
         rel = plan.suggested_relation or {}
-        col_a = rel.get("sourceColumn", "MATVINC")
-        col_b = rel.get("targetColumn", "matricula")
+        col_a = rel.get("sourceColumn")
+        col_b = rel.get("targetColumn")
 
-        # Adapta os dados respeitando as chaves aprovadas para o nó Data Bridge do n8n
-        formatted_funcionarios = []
+        # Prepara registros preservando todos os atributos originais e provendo chaves
+        formatted_a = []
         for r in records_a:
             item = dict(r)
-            item["MATVINC"] = r.get(col_a)
-            item["nome"] = r.get("NOME_SERVIDOR") or r.get("NOME") or r.get("nome") or str(r.get(col_a))
-            formatted_funcionarios.append(item)
+            if col_a and col_a in r:
+                item["_key"] = r[col_a]
+                item["MATVINC"] = r[col_a] # Alias não-destrutivo para compatibilidade
+            formatted_a.append(item)
 
-        formatted_pagamentos = []
+        formatted_b = []
         for r in records_b:
             item = dict(r)
-            item["matricula"] = r.get(col_b)
-            item["valor"] = r.get("valor_pagamento") or r.get("VALOR") or r.get("valor") or 0.0
-            formatted_pagamentos.append(item)
+            if col_b and col_b in r:
+                item["_key"] = r[col_b]
+                item["matricula"] = r[col_b] # Alias não-destrutivo para compatibilidade
+            formatted_b.append(item)
 
         start_time = time.time()
 
-        # Invoca o webhook real do Data Bridge no n8n
+        # Invoca o webhook real do Data Bridge no n8n de forma agnóstica
         n8n_result = await n8n_client.trigger_data_bridge_webhook(
-            funcionarios=formatted_funcionarios,
-            pagamentos=formatted_pagamentos
+            base_a=formatted_a,
+            base_b=formatted_b,
+            key_a=col_a,
+            key_b=col_b,
+            funcionarios=formatted_a,
+            pagamentos=formatted_b
         )
 
         duration_ms = int((time.time() - start_time) * 1000)
 
         resumo = n8n_result.get("resumo", {})
-        matched = n8n_result.get("funcionariosComPagamento", [])
-        unmatched_a = n8n_result.get("funcionariosSemPagamento", [])
-        unmatched_b = n8n_result.get("pagamentosSemFuncionario", [])
+        matched = n8n_result.get("matched") or n8n_result.get("funcionariosComPagamento", [])
+        unmatched_a = n8n_result.get("unmatchedA") or n8n_result.get("funcionariosSemPagamento", [])
+        unmatched_b = n8n_result.get("unmatchedB") or n8n_result.get("pagamentosSemFuncionario", [])
 
         # Salva o registro de execução com auditoria completa
         execution = PipelineExecutionModel(

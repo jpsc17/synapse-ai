@@ -1,9 +1,10 @@
+﻿import { Icon } from './Icon';
 import React, { useState } from 'react';
 import { useSynapse } from '../../context/SynapseContext';
 import { N8N_WORKFLOW_REFS } from '../../services/apiService';
 
 export const DemoNoticeBanner: React.FC = () => {
-  const { backendOnline } = useSynapse();
+  const { backendOnline, n8nReachable } = useSynapse();
   const [dismissed, setDismissed] = useState(false);
 
   if (dismissed) return null;
@@ -11,16 +12,18 @@ export const DemoNoticeBanner: React.FC = () => {
   return (
     <div className="bg-surface-container-low border border-primary/30 rounded p-3 text-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-2 shadow-[0_0_12px_rgba(39,224,195,0.1)]">
       <div className="flex items-center gap-2.5">
-        <span className={`material-symbols-outlined text-[18px] ${backendOnline ? 'text-primary' : 'text-amber-400'}`}>
-          {backendOnline ? 'cloud_done' : 'cloud_off'}
-        </span>
+        <Icon name={backendOnline && n8nReachable ? 'cloud_done' : 'cloud_off'} className={`w-[18px] h-[18px] ${backendOnline && n8nReachable ? 'text-primary' : 'text-amber-400'}`} />
         <div>
-          <span className={`font-semibold font-code-compact ${backendOnline ? 'text-primary' : 'text-amber-400'}`}>
-            {backendOnline ? 'SISTEMA INTEGRADO: FASTAPI (8000) + n8n (5678) ATIVOS' : 'MODO DEMONSTRATIVO / DESCONECTADO'}
+          <span className={`font-semibold font-code-compact ${backendOnline && n8nReachable ? 'text-primary' : 'text-amber-400'}`}>
+            {backendOnline && n8nReachable
+              ? 'SISTEMA INTEGRADO: FASTAPI (8000) + n8n (5678) ATIVOS'
+              : backendOnline
+              ? 'FASTAPI ONLINE · n8n INDISPONÍVEL'
+              : 'FASTAPI INDISPONÍVEL'}
           </span>
           <span className="text-on-surface-variant mx-1.5">•</span>
           <span className="text-on-surface">
-            {backendOnline ? (
+            {backendOnline && n8nReachable ? (
               <>
                 Fluxos operacionais conectados via Webhooks reais aos workflows n8n (
                 <code className="text-primary font-code-compact">{N8N_WORKFLOW_REFS.DATA_BRIDGE_POC}</code> e{' '}
@@ -29,7 +32,9 @@ export const DemoNoticeBanner: React.FC = () => {
               </>
             ) : (
               <>
-                Operando com mock local. Inicie o servidor FastAPI na porta 8000 para sincronização automática.
+                {backendOnline
+                  ? 'Descoberta e execução estão desabilitadas até o n8n voltar a responder.'
+                  : 'Nenhum dado fictício será usado. Inicie o FastAPI na porta 8000 para operar o fluxo.'}
               </>
             )}
           </span>
@@ -41,7 +46,7 @@ export const DemoNoticeBanner: React.FC = () => {
         className="text-on-surface-variant hover:text-on-surface p-1 self-end md:self-center transition-colors"
         title="Dispensar aviso"
       >
-        <span className="material-symbols-outlined text-[16px]">close</span>
+        <Icon name="close" className="text-[16px]" />
       </button>
     </div>
   );

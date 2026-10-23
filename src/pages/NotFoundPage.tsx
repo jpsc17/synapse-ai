@@ -1,3 +1,4 @@
+﻿import { Icon } from '../components/common/Icon';
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -7,7 +8,7 @@ export const NotFoundPage: React.FC = () => {
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-4">
       <div className="w-16 h-16 rounded-full bg-surface-container border border-outline-variant flex items-center justify-center text-primary glow-primary">
-        <span className="material-symbols-outlined text-[32px]">error_outline</span>
+        <Icon name="error_outline" className="text-[32px]" />
       </div>
       <div>
         <h1 className="text-2xl font-bold font-code-compact text-on-surface">404 — Módulo Não Encontrado</h1>

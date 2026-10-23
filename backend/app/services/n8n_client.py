@@ -16,6 +16,13 @@ class N8NClient:
         self.data_bridge_url = settings.N8N_DATA_BRIDGE_WEBHOOK_URL
         self.timeout = settings.N8N_TIMEOUT_SECONDS
 
+    @staticmethod
+    def _webhook_headers() -> Dict[str, str]:
+        headers = {"Content-Type": "application/json"}
+        if settings.N8N_WEBHOOK_AUTH_HEADER and settings.N8N_WEBHOOK_AUTH_VALUE:
+            headers[settings.N8N_WEBHOOK_AUTH_HEADER] = settings.N8N_WEBHOOK_AUTH_VALUE
+        return headers
+
     async def check_health(self) -> Dict[str, Any]:
         """Verifica a conectividade HTTP real com a instância do n8n."""
         try:
@@ -54,7 +61,7 @@ class N8NClient:
                 response = await client.post(
                     self.discovery_url,
                     json=payload,
-                    headers={"Content-Type": "application/json"}
+                    headers=self._webhook_headers()
                 )
 
                 if response.status_code != 200:
@@ -82,26 +89,38 @@ class N8NClient:
 
     async def trigger_data_bridge_webhook(
         self,
-        funcionarios: List[Dict[str, Any]],
-        pagamentos: List[Dict[str, Any]]
+        base_a: Optional[List[Dict[str, Any]]] = None,
+        base_b: Optional[List[Dict[str, Any]]] = None,
+        key_a: Optional[str] = None,
+        key_b: Optional[str] = None,
+        funcionarios: Optional[List[Dict[str, Any]]] = None,
+        pagamentos: Optional[List[Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
         """
-        Dispara o workflow n8n WvgldAqi81hUMq58 (Data Bridge POC)
+        Dispara o workflow n8n WvgldAqi81hUMq58 (Data Bridge Universal)
         via requisição HTTP POST direta no webhook de produção.
         """
+        records_a = base_a if base_a is not None else (funcionarios or [])
+        records_b = base_b if base_b is not None else (pagamentos or [])
+
         payload = {
-            "funcionarios": funcionarios,
-            "pagamentos": pagamentos
+            "baseA": records_a,
+            "baseB": records_b,
+            "keyA": key_a,
+            "keyB": key_b,
+            # Retrocompatibilidade com testes e workflows que esperam chaves legadas
+            "funcionarios": records_a,
+            "pagamentos": records_b
         }
 
-        logger.info(f"Chamando n8n Data Bridge Webhook em {self.data_bridge_url} com {len(funcionarios)} funcionarios e {len(pagamentos)} pagamentos")
+        logger.info(f"Chamando n8n Data Bridge Webhook em {self.data_bridge_url} com {len(records_a)} registros em A e {len(records_b)} em B (Chaves: {key_a} <-> {key_b})")
 
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.post(
                     self.data_bridge_url,
                     json=payload,
-                    headers={"Content-Type": "application/json"}
+                    headers=self._webhook_headers()
                 )
 
                 if response.status_code != 200:
