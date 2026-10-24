@@ -62,12 +62,20 @@ def test_operator_and_admin_roles_are_enforced_by_backend():
             setattr(settings, name, value)
 
 
-def test_cleanup_route_is_hidden_in_production_even_with_admin_key():
+def test_cleanup_route_is_hidden_in_production_even_with_admin_key(monkeypatch):
     original_environment = settings.ENVIRONMENT
     original_key = settings.ADMIN_API_KEY
     original_webhook_header = settings.N8N_WEBHOOK_AUTH_HEADER
     original_webhook_value = settings.N8N_WEBHOOK_AUTH_VALUE
     try:
+        monkeypatch.setenv(
+            "N8N_DISCOVERY_WEBHOOK_URL",
+            "https://n8n.example.test/webhook/synapse-intelligent-discovery",
+        )
+        monkeypatch.setenv(
+            "N8N_DATA_BRIDGE_WEBHOOK_URL",
+            "https://n8n.example.test/webhook/synapse-data-bridge",
+        )
         settings.ENVIRONMENT = "production"
         settings.ADMIN_API_KEY = "admin-test-key"
         settings.N8N_WEBHOOK_AUTH_HEADER = "X-Synapse-Webhook-Key"

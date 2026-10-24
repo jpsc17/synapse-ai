@@ -1,6 +1,8 @@
+import ipaddress
 import os
 from pathlib import Path
-from typing import List
+from typing import List, Mapping
+from urllib.parse import urlsplit
 from dotenv import load_dotenv
 
 # Carrega .env a partir da pasta backend/
@@ -31,6 +33,59 @@ def resolve_database_url(raw_url: str | None) -> str:
 
 def env_bool(name: str, default: bool = False) -> bool:
     return os.getenv(name, str(default)).strip().lower() in {"1", "true", "yes", "on"}
+
+
+N8N_WEBHOOK_URL_VARIABLES = (
+    "N8N_DISCOVERY_WEBHOOK_URL",
+    "N8N_DATA_BRIDGE_WEBHOOK_URL",
+)
+
+
+def _is_local_webhook_host(hostname: str) -> bool:
+    normalized = hostname.rstrip(".").lower()
+    if normalized == "localhost" or normalized.endswith(".localhost"):
+        return True
+    try:
+        address = ipaddress.ip_address(normalized)
+    except ValueError:
+        return False
+    return address.is_loopback or address.is_unspecified
+
+
+def validate_n8n_webhook_urls(
+    environment: str,
+    environ: Mapping[str, str] | None = None,
+) -> None:
+    """Exige webhooks n8n HTTP(S) explícitos e remotos fora de development."""
+    if environment.strip().lower() not in {"staging", "production"}:
+        return
+
+    source = os.environ if environ is None else environ
+    problems: list[str] = []
+    for variable_name in N8N_WEBHOOK_URL_VARIABLES:
+        raw_url = source.get(variable_name, "").strip()
+        if not raw_url:
+            problems.append(f"{variable_name} deve ser configurada explicitamente")
+            continue
+
+        try:
+            parsed = urlsplit(raw_url)
+            hostname = parsed.hostname
+            _ = parsed.port
+        except ValueError:
+            parsed = None
+            hostname = None
+
+        if parsed is None or parsed.scheme not in {"http", "https"} or not hostname:
+            problems.append(f"{variable_name} deve conter uma URL HTTP(S) válida")
+        elif _is_local_webhook_host(hostname):
+            problems.append(f"{variable_name} não pode apontar para localhost")
+
+    if problems:
+        raise RuntimeError(
+            "Configuração dos webhooks n8n inválida: " + "; ".join(problems) + "."
+        )
+
 
 class Settings:
     PROJECT_NAME: str = "SYNAPSE AI Backend"

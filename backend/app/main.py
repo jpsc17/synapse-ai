@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, text
 
-from app.config import settings
+from app.config import settings, validate_n8n_webhook_urls
 from app.database import engine, Base, get_db
 from app.models import DataSourceModel, AnalysisPlanModel, GovernanceDecisionModel, PipelineExecutionModel, AdministrativeAuditModel
 from app.schemas import (
@@ -215,6 +215,7 @@ def seed_initial_datasets_if_empty(db: Session):
 
 @app.on_event("startup")
 def startup_event():
+    validate_n8n_webhook_urls(settings.ENVIRONMENT)
     if settings.AUTH_REQUIRED and not settings.OPERATOR_API_KEY:
         raise RuntimeError("OPERATOR_API_KEY deve estar configurada quando AUTH_REQUIRED=true.")
     if settings.ENVIRONMENT.lower() in {"staging", "production"} and not (
