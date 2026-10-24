@@ -87,6 +87,29 @@ def validate_n8n_webhook_urls(
         )
 
 
+def validate_evaluator_auth_settings(
+    environment: str,
+    evaluator_email: str,
+    evaluator_password_hash: str,
+    auth_required: bool = True,
+) -> None:
+    """Impede ambientes publicados sem credenciais humanas seguras."""
+    if environment.strip().lower() not in {"staging", "production"}:
+        return
+
+    problems: list[str] = []
+    if not auth_required:
+        problems.append("AUTH_REQUIRED deve permanecer true")
+    if not evaluator_email or "@" not in evaluator_email:
+        problems.append("EVALUATOR_EMAIL deve conter um e-mail válido")
+    if not evaluator_password_hash:
+        problems.append("EVALUATOR_PASSWORD_HASH deve ser configurada")
+    elif not evaluator_password_hash.startswith("$argon2"):
+        problems.append("EVALUATOR_PASSWORD_HASH deve conter um hash Argon2")
+    if problems:
+        raise RuntimeError("Configuração do login dos avaliadores inválida: " + "; ".join(problems) + ".")
+
+
 class Settings:
     PROJECT_NAME: str = "SYNAPSE AI Backend"
     VERSION: str = "1.0.0"
@@ -137,6 +160,11 @@ class Settings:
     )
     OPERATOR_API_KEY: str = os.getenv("OPERATOR_API_KEY", "")
     ADMIN_API_KEY: str = os.getenv("ADMIN_API_KEY", "")
+    EVALUATOR_EMAIL: str = os.getenv("EVALUATOR_EMAIL", "").strip().lower()
+    EVALUATOR_PASSWORD_HASH: str = os.getenv("EVALUATOR_PASSWORD_HASH", "").strip()
+    EVALUATOR_SESSION_TTL_MINUTES: int = int(os.getenv("EVALUATOR_SESSION_TTL_MINUTES", "60"))
+    EVALUATOR_LOGIN_MAX_ATTEMPTS: int = int(os.getenv("EVALUATOR_LOGIN_MAX_ATTEMPTS", "5"))
+    EVALUATOR_LOGIN_WINDOW_SECONDS: int = int(os.getenv("EVALUATOR_LOGIN_WINDOW_SECONDS", "900"))
 
 settings = Settings()
 settings.UPLOAD_DIR.mkdir(parents=True, exist_ok=True)

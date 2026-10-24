@@ -29,6 +29,22 @@
 export const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1';
 const AUTH_TOKEN_KEY = 'synapse_operator_token';
 
+export interface AuthUser {
+  email: string | null;
+  role: string;
+}
+
+export interface AuthSession {
+  authenticated: boolean;
+  user: AuthUser;
+  expires_at: string | null;
+}
+
+export interface LoginResponse extends AuthSession {
+  access_token: string;
+  token_type: 'bearer';
+}
+
 export const getStoredAuthToken = (): string => {
   if (typeof window === 'undefined') return '';
   return window.sessionStorage.getItem(AUTH_TOKEN_KEY) ?? '';
@@ -55,16 +71,21 @@ const request = async (path: string, init: RequestInit, timeoutMs: number): Prom
     const headers = new Headers(init.headers);
     const token = getStoredAuthToken();
     if (token) headers.set('Authorization', `Bearer ${token}`);
-    return await fetch(`${BACKEND_URL}${path}`, {
+    const response = await fetch(`${BACKEND_URL}${path}`, {
       ...init,
       headers,
       signal: AbortSignal.timeout(timeoutMs),
     });
+    if (response.status === 401 && !path.startsWith('/auth/login')) {
+      setStoredAuthToken('');
+      window.dispatchEvent(new Event('synapse-session-expired'));
+    }
+    return response;
   } catch (error) {
     if (error instanceof DOMException && error.name === 'TimeoutError') {
       throw new Error(`FastAPI não respondeu dentro de ${Math.round(timeoutMs / 1000)}s.`);
     }
-    throw new Error('FastAPI indisponível em 127.0.0.1:8000. Verifique se o backend está online.');
+    throw new Error('FastAPI indisponível. Verifique se o backend configurado está online.');
   }
 };
 
@@ -164,6 +185,29 @@ export const INITIAL_PIPELINE: Pipeline = {
 };
 
 export const apiService = {
+  login: async (email: string, password: string): Promise<LoginResponse> => {
+    const resp = await request('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    }, 10000);
+    if (!resp.ok) throw new Error(await readApiError(resp, 'Não foi possível entrar.'));
+    return await resp.json() as LoginResponse;
+  },
+
+  getCurrentSession: async (): Promise<AuthSession> => {
+    const resp = await request('/auth/session', {}, 8000);
+    if (!resp.ok) throw new Error(await readApiError(resp, 'Sessão inválida ou expirada.'));
+    return await resp.json() as AuthSession;
+  },
+
+  logout: async (): Promise<void> => {
+    const resp = await request('/auth/logout', { method: 'POST' }, 8000);
+    if (!resp.ok && resp.status !== 401) {
+      throw new Error(await readApiError(resp, 'Não foi possível encerrar a sessão.'));
+    }
+  },
+
   verifyAccessToken: async (token: string): Promise<{ authenticated: boolean; role: string }> => {
     const resp = await fetch(`${BACKEND_URL}/auth/verify`, {
       method: 'POST',

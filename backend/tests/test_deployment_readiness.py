@@ -17,6 +17,8 @@ def test_every_metadata_table_compiles_for_postgresql():
         "governance_decisions",
         "pipeline_executions",
         "administrative_audit_events",
+        "evaluator_sessions",
+        "evaluator_login_attempts",
     }
     assert expected == set(Base.metadata.tables)
     for table in Base.metadata.sorted_tables:

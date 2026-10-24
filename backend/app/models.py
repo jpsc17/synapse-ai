@@ -81,3 +81,28 @@ class AdministrativeAuditModel(Base):
     actor = Column(String(100), default="synapse-operator")
     details = Column(JSON, default=dict)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class EvaluatorSessionModel(Base):
+    """Sessão humana revogável; somente o hash do token é persistido."""
+
+    __tablename__ = "evaluator_sessions"
+
+    token_hash = Column(String(64), primary_key=True)
+    email = Column(String(320), nullable=False)
+    role = Column(String(50), default="evaluator", nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    expires_at = Column(DateTime, nullable=False, index=True)
+    revoked_at = Column(DateTime, nullable=True)
+
+
+class EvaluatorLoginAttemptModel(Base):
+    """Janela persistente de rate limiting sem armazenar e-mail ou IP em claro."""
+
+    __tablename__ = "evaluator_login_attempts"
+
+    key_hash = Column(String(64), primary_key=True)
+    attempts = Column(Integer, default=0, nullable=False)
+    window_started_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    blocked_until = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)

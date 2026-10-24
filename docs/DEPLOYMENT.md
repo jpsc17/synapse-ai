@@ -35,6 +35,11 @@ Somente `VITE_API_URL` pode ser exposta ao bundle do navegador. Valores entre `<
 | `AUTH_REQUIRED` | FastAPI | Exige Bearer nas rotas funcionais | `true` |
 | `OPERATOR_API_KEY` | FastAPI (secreto) | Dados, importação, descoberta, decisão e execução | `<GERAR_NO_RAILWAY>` |
 | `ADMIN_API_KEY` | FastAPI (secreto) | Administração e exclusões quando habilitadas | `<GERAR_NO_RAILWAY>` |
+| `EVALUATOR_EMAIL` | FastAPI (secreto) | Identidade humana permitida no login | `avaliador@example.org` |
+| `EVALUATOR_PASSWORD_HASH` | FastAPI (secreto) | Hash Argon2 da senha, nunca a senha em claro | `<HASH_ARGON2>` |
+| `EVALUATOR_SESSION_TTL_MINUTES` | FastAPI | Validade da sessão humana | `60` |
+| `EVALUATOR_LOGIN_MAX_ATTEMPTS` | FastAPI | Tentativas antes do bloqueio temporário | `5` |
+| `EVALUATOR_LOGIN_WINDOW_SECONDS` | FastAPI | Janela persistente do rate limit | `900` |
 | `DESTRUCTIVE_OPERATIONS_ENABLED` | FastAPI | Gate adicional para exclusão | `false` |
 | `ADMIN_MAINTENANCE_ENABLED` | FastAPI | Gate de limpeza local | `false` |
 | `SEED_DEMO_DATA` | FastAPI | Seed automático legado; manter desligado e importar a base versionada | `false` |
@@ -77,10 +82,23 @@ ADMIN_MAINTENANCE_ENABLED=false
 AUTH_REQUIRED=true
 OPERATOR_API_KEY=<SEGREDO_DE_OPERADOR_FORTE>
 ADMIN_API_KEY=<SEGREDO_FORTE_NAO_EXPOSTO_NO_FRONTEND>
+EVALUATOR_EMAIL=<EMAIL_DO_AVALIADOR>
+EVALUATOR_PASSWORD_HASH=<HASH_ARGON2_GERADO_LOCALMENTE>
+EVALUATOR_SESSION_TTL_MINUTES=60
+EVALUATOR_LOGIN_MAX_ATTEMPTS=5
+EVALUATOR_LOGIN_WINDOW_SECONDS=900
 SEED_DEMO_DATA=false
 ```
 
-Anexe um volume em `/data`. O healthcheck configurado é `/api/v1/health`. Não habilite operações destrutivas no site público. Entregue a credencial de operador apenas ao apresentador, pelo modal “Acesso operador”; o token permanece em `sessionStorage`. A chave administrativa deve ser usada somente por cliente confiável fora do navegador e em janela de manutenção.
+Gere o hash localmente, digitando a senha no prompt. Não inclua a senha no comando ou no histórico:
+
+```bash
+python -c "from argon2 import PasswordHasher; import getpass; print(PasswordHasher().hash(getpass.getpass('Senha: ')))"
+```
+
+Copie somente o resultado `$argon2...` para `EVALUATOR_PASSWORD_HASH` no Railway. Em `staging` e `production`, a inicialização falha de forma segura se o e-mail ou o hash Argon2 estiverem ausentes. O papel `evaluator` pode importar, descobrir, decidir governança, executar e consultar histórico, mas não satisfaz os gates administrativos ou destrutivos. O token opaco fica em `sessionStorage`; somente seu hash é persistido no PostgreSQL.
+
+Anexe um volume em `/data`. O healthcheck configurado é `/api/v1/health`. Não habilite operações destrutivas no site público. O avaliador usa a tela de login, sem visualizar API keys ou tokens. As chaves de operador e administrador permanecem reservadas a clientes técnicos confiáveis.
 
 ## 3. n8n Railway
 
@@ -144,9 +162,9 @@ Rollback:
 4. Restaure a mesma `N8N_ENCRYPTION_KEY` e a versão anterior dos workflows se o problema estiver no n8n.
 5. Reexecute health, autenticação e uma jornada sintética antes de reabrir o acesso.
 
-## Bloqueador de segurança conhecido
+## Limite de escopo de identidade
 
-O gate mínimo usa tokens Bearer de operador e administrador validados no FastAPI. Ele é adequado à demonstração controlada, mas ainda não substitui identidade individual, expiração/rotação automatizada e RBAC com usuários. A chave administrativa nunca deve ser compilada como variável `VITE_*`.
+O ambiente de demonstração possui uma identidade de avaliador configurada por ambiente, com sessão curta, revogável e rate limit persistente. Ele não é um diretório multiusuário. A chave administrativa nunca deve ser compilada como variável `VITE_*`.
 
 O host desta auditoria não possui Docker daemon nem PostgreSQL de teste. Portanto, o build real das imagens e a jornada contra PostgreSQL continuam sendo gates obrigatórios do staging; a validação local cobriu compilação do schema PostgreSQL, normalização do driver e regressão funcional isolada.
 
@@ -188,6 +206,8 @@ Antes do `commit`, inspecione `git diff --cached` porque o worktree já continha
 - [ ] Root `backend`; volume `/data`; health `/api/v1/health`.
 - [ ] Configurar todas as variáveis do exemplo, com `ENVIRONMENT=staging`, `AUTH_REQUIRED=true` e gates destrutivos `false`.
 - [ ] Gerar `OPERATOR_API_KEY` e `ADMIN_API_KEY` diferentes no secret manager.
+- [ ] Definir `EVALUATOR_EMAIL` e `EVALUATOR_PASSWORD_HASH` Argon2; nunca definir a senha em claro.
+- [ ] Validar login, refresh, logout, expiração, rate limit e bloqueio administrativo para `evaluator`.
 - [ ] Confirmar `401` sem token em fontes/importação/descoberta/governança/execução e `403` em exclusões.
 - [ ] Reiniciar o serviço e confirmar persistência de arquivos em `/data/uploads`.
 

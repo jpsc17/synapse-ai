@@ -2,6 +2,31 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 from pydantic import BaseModel, Field
 
+
+class EvaluatorLoginRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
+    password: str = Field(min_length=1, max_length=512)
+
+
+class AuthUserResponse(BaseModel):
+    email: Optional[str] = None
+    role: str
+
+
+class AuthSessionResponse(BaseModel):
+    authenticated: bool = True
+    user: AuthUserResponse
+    expires_at: Optional[datetime] = None
+
+
+class EvaluatorLoginResponse(AuthSessionResponse):
+    access_token: str
+    token_type: str = "bearer"
+
+
+class LogoutResponse(BaseModel):
+    logged_out: bool
+
 # Modelos para Fontes de Dados
 class ColumnMeta(BaseModel):
     name: str

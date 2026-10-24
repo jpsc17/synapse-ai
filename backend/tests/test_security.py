@@ -67,6 +67,10 @@ def test_cleanup_route_is_hidden_in_production_even_with_admin_key(monkeypatch):
     original_key = settings.ADMIN_API_KEY
     original_webhook_header = settings.N8N_WEBHOOK_AUTH_HEADER
     original_webhook_value = settings.N8N_WEBHOOK_AUTH_VALUE
+    original_evaluator_email = settings.EVALUATOR_EMAIL
+    original_evaluator_hash = settings.EVALUATOR_PASSWORD_HASH
+    original_auth_required = settings.AUTH_REQUIRED
+    original_operator_key = settings.OPERATOR_API_KEY
     try:
         monkeypatch.setenv(
             "N8N_DISCOVERY_WEBHOOK_URL",
@@ -80,6 +84,10 @@ def test_cleanup_route_is_hidden_in_production_even_with_admin_key(monkeypatch):
         settings.ADMIN_API_KEY = "admin-test-key"
         settings.N8N_WEBHOOK_AUTH_HEADER = "X-Synapse-Webhook-Key"
         settings.N8N_WEBHOOK_AUTH_VALUE = "test-only-value"
+        settings.EVALUATOR_EMAIL = "avaliador@example.org"
+        settings.EVALUATOR_PASSWORD_HASH = "$argon2id$test-only-placeholder"
+        settings.AUTH_REQUIRED = True
+        settings.OPERATOR_API_KEY = "operator-test-key"
         with TestClient(app) as client:
             response = client.get(
                 "/api/v1/admin/cleanup/impact",
@@ -91,6 +99,10 @@ def test_cleanup_route_is_hidden_in_production_even_with_admin_key(monkeypatch):
         settings.ADMIN_API_KEY = original_key
         settings.N8N_WEBHOOK_AUTH_HEADER = original_webhook_header
         settings.N8N_WEBHOOK_AUTH_VALUE = original_webhook_value
+        settings.EVALUATOR_EMAIL = original_evaluator_email
+        settings.EVALUATOR_PASSWORD_HASH = original_evaluator_hash
+        settings.AUTH_REQUIRED = original_auth_required
+        settings.OPERATOR_API_KEY = original_operator_key
 
 
 def test_security_headers_and_unknown_cors_origin():

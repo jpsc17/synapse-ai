@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, text
 
-from app.config import settings, validate_n8n_webhook_urls
+from app.config import settings, validate_evaluator_auth_settings, validate_n8n_webhook_urls
 from app.database import engine, Base, get_db
 from app.models import DataSourceModel, AnalysisPlanModel, GovernanceDecisionModel, PipelineExecutionModel, AdministrativeAuditModel
 from app.schemas import (
@@ -37,14 +37,26 @@ from app.schemas import (
     PipelineExecutionResponse,
     PipelineExecutionSummaryResponse,
     HealthResponse,
-    SystemMetricsResponse
+    SystemMetricsResponse,
+    EvaluatorLoginRequest,
+    EvaluatorLoginResponse,
+    AuthSessionResponse,
+    AuthUserResponse,
+    LogoutResponse,
 )
 from app.parsers import parse_file_to_records
 from app.services.n8n_client import n8n_client, N8NIntegrationError
 from app.services.discovery_service import DiscoveryService
 from app.services.governance_service import GovernanceService, GovernanceViolationError
 from app.services.source_admin_service import source_impact, remove_unshared_source_file, audit_event
-from app.security import access_role, require_operator
+from app.services.auth_service import (
+    AuthIdentity,
+    InvalidCredentialsError,
+    LoginRateLimitError,
+    authenticate_evaluator,
+    revoke_evaluator_session,
+)
+from app.security import access_identity, access_role, bearer_token, require_identity, require_operator
 
 # Cria tabelas no banco de dados SQLite
 Base.metadata.create_all(bind=engine)
@@ -216,6 +228,12 @@ def seed_initial_datasets_if_empty(db: Session):
 @app.on_event("startup")
 def startup_event():
     validate_n8n_webhook_urls(settings.ENVIRONMENT)
+    validate_evaluator_auth_settings(
+        settings.ENVIRONMENT,
+        settings.EVALUATOR_EMAIL,
+        settings.EVALUATOR_PASSWORD_HASH,
+        settings.AUTH_REQUIRED,
+    )
     if settings.AUTH_REQUIRED and not settings.OPERATOR_API_KEY:
         raise RuntimeError("OPERATOR_API_KEY deve estar configurada quando AUTH_REQUIRED=true.")
     if settings.ENVIRONMENT.lower() in {"staging", "production"} and not (
@@ -251,12 +269,57 @@ async def get_health(db: Session = Depends(get_db)):
 def authentication_status(
     authorization: Optional[str] = Header(default=None),
     x_admin_key: Optional[str] = Header(default=None),
+    db: Session = Depends(get_db),
 ):
+    identity = access_identity(authorization, x_admin_key, db)
     return {
         "required": settings.AUTH_REQUIRED,
-        "authenticated": access_role(authorization, x_admin_key) is not None,
-        "role": access_role(authorization, x_admin_key),
+        "authenticated": identity is not None or not settings.AUTH_REQUIRED,
+        "role": identity.role if identity else ("development" if not settings.AUTH_REQUIRED else None),
     }
+
+
+@app.post("/api/v1/auth/login", response_model=EvaluatorLoginResponse)
+def login_evaluator(
+    credentials: EvaluatorLoginRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    client_host = request.client.host if request.client else "unknown"
+    try:
+        issued = authenticate_evaluator(db, credentials.email, credentials.password, client_host)
+    except LoginRateLimitError as error:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Muitas tentativas de login. Tente novamente mais tarde.",
+            headers={"Retry-After": str(error.retry_after_seconds)},
+        ) from error
+    except InvalidCredentialsError as error:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="E-mail ou senha inválidos.") from error
+    return EvaluatorLoginResponse(
+        access_token=issued.token,
+        user=AuthUserResponse(email=issued.identity.email, role=issued.identity.role),
+        expires_at=issued.identity.expires_at,
+    )
+
+
+@app.get("/api/v1/auth/session", response_model=AuthSessionResponse)
+def current_authentication_session(identity: AuthIdentity = Depends(require_identity)):
+    return AuthSessionResponse(
+        user=AuthUserResponse(email=identity.email, role=identity.role),
+        expires_at=identity.expires_at,
+    )
+
+
+@app.post("/api/v1/auth/logout", response_model=LogoutResponse)
+def logout_evaluator(
+    authorization: Optional[str] = Header(default=None),
+    identity: AuthIdentity = Depends(require_identity),
+    db: Session = Depends(get_db),
+):
+    if identity.role == "evaluator":
+        revoke_evaluator_session(db, bearer_token(authorization))
+    return LogoutResponse(logged_out=True)
 
 
 @app.post("/api/v1/auth/verify")
